@@ -1,13 +1,19 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import EastIcon from "@mui/icons-material/East";
 
 export default function Page() {
+  const params = useParams();
+  const chatId = params?.chat_id as string | undefined;
   const [input, setInput] = useState("");
-  const { messages, sendMessage } = useChat({});
   const [model, setModel] = useState("deepseek-v3");
+  const { messages, sendMessage, error } = useChat({
+    id: chatId,
+    onError: (err) => console.error("Chat error:", err),
+  });
   const handleChangeModel = () => {
     setModel(model === "deepseek-v3" ? "deepseek-r1" : "deepseek-v3");
   };
@@ -21,7 +27,7 @@ export default function Page() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
-    sendMessage({ text: input });
+    sendMessage({ text: input }, { body: { model } });
     setInput("");
   };
 
@@ -29,6 +35,9 @@ export default function Page() {
     <div className="flex flex-col h-screen justify-between items-center">
       <div className="flex flex-col w-2/3 gap-8 overflow-auto justify-between flex-1">
         <div className="h-4"></div>
+        {error && (
+          <p className="text-red-600 text-sm px-2">{error.message}</p>
+        )}
         <div className="flex flex-col gap-8 flex-1">
           {messages?.map((message) => (
             <div
