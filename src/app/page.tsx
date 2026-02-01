@@ -21,9 +21,9 @@ export default function Home() {
       <div className="h-1/5"></div>
       <div className="w-1/2">
         <p className="font-bold text-2xl text-center">Welcome to DeepScan!</p>
-        <div className="flex flex-col items-center justify-center mt-4 shadow-lg border-[1px] border-gray-300 h-32 rounded-lg w-2/3">
+        <div className="flex flex-col justify-center mt-4 shadow-lg border-[1px] border-gray-300 h-32 rounded-lg w-full">
           <textarea
-            className="w-full rounded-lg p-3 h-32 focus:outline-none"
+            className="w-full rounded-lg p-3 h-30 focus:outline-none"
             value={input}
             onChange={(e) => setInput(e.target.value)}
           ></textarea>
