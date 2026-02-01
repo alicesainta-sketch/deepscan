@@ -35,9 +35,7 @@ export default function Page() {
     <div className="flex flex-col h-screen justify-between items-center">
       <div className="flex flex-col w-2/3 gap-8 overflow-auto justify-between flex-1">
         <div className="h-4"></div>
-        {error && (
-          <p className="text-red-600 text-sm px-2">{error.message}</p>
-        )}
+        {error && <p className="text-red-600 text-sm px-2">{error.message}</p>}
         <div className="flex flex-col gap-8 flex-1">
           {messages?.map((message) => (
             <div
