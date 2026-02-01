@@ -42,7 +42,7 @@ export default function Page() {
               key={message.id}
               className={`rounded-lg flex flex-row ${
                 message?.role === "assistant"
-                  ? "justify-start mr-18"
+                  ? "justify-start mr-20"
                   : "justify-end ml-10"
               }`}
             >
@@ -80,7 +80,7 @@ export default function Page() {
           className="flex flex-col items-center justify-center mt-4 shadow-lg border-[1px] border-gray-300 h-32 rounded-lg"
         >
           <textarea
-            className="w-full rounded-lg p-3 h-30 focus:outline-none"
+            className="w-full rounded-lg p-3 h-32 focus:outline-none"
             value={input}
             onChange={(e) => setInput(e.target.value)}
           ></textarea>

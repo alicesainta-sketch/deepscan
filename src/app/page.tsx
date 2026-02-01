@@ -23,7 +23,7 @@ export default function Home() {
         <p className="font-bold text-2xl text-center">Welcome to DeepScan!</p>
         <div className="flex flex-col items-center justify-center mt-4 shadow-lg border-[1px] border-gray-300 h-32 rounded-lg w-2/3">
           <textarea
-            className="w-full rounded-lg p-3 h-30 focus:outline-none"
+            className="w-full rounded-lg p-3 h-32 focus:outline-none"
             value={input}
             onChange={(e) => setInput(e.target.value)}
           ></textarea>
@@ -31,7 +31,11 @@ export default function Home() {
             <div>
               <div
                 className={`flex flex-row items-center justify-center rounded-lg border-[1px]
-            px-2 py-1 ml-2 cursor-pointer ${model === "deepseek-r1" ? "border-blue-300 bg-blue-200" : "border-gray-300"}`}
+            px-2 py-1 ml-2 cursor-pointer ${
+              model === "deepseek-r1"
+                ? "border-blue-300 bg-blue-200"
+                : "border-gray-300"
+            }`}
                 onClick={handleChangeModel}
               >
                 <p className="text-sm">深度思考（R1）</p>

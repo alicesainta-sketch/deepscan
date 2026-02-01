@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@ai-sdk/deepseek": "^2.0.15",
-    "@ai-sdk/openai-compatible": "^1.0.0",
     "@ai-sdk/react": "^3.0.64",
     "@clerk/nextjs": "^6.37.0",
     "@emotion/react": "^11.14.0",
