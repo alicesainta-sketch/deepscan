@@ -3,17 +3,36 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import EastIcon from "@mui/icons-material/East";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 
 export default function Home() {
   const router = useRouter();
   const [input, setInput] = useState("");
   const [model, setModel] = useState("deepseek-v3");
+  const queryClient = useQueryClient();
+
   const handleChangeModel = () => {
     setModel(model === "deepseek-v3" ? "deepseek-r1" : "deepseek-v3");
   };
+
+  const { mutate: createChat } = useMutation({
+    mutationFn: async () => {
+      const res = await axios.post("/api/createChat", {
+        title: input,
+        model: model,
+      });
+      return res.data;
+    },
+    onSuccess: (data: { id: string }) => {
+      router.push(`/chat/${data.id}`);
+      queryClient.invalidateQueries({ queryKey: ["chats"] });
+    },
+  });
+
   const handleSubmit = (e: React.MouseEvent) => {
     e.preventDefault();
-    router.push(`/chat/${crypto.randomUUID()}`);
+    createChat();
   };
 
   return (
