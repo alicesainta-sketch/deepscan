@@ -16,6 +16,7 @@ export default function Home() {
     setModel(model === "deepseek-v3" ? "deepseek-r1" : "deepseek-v3");
   };
 
+  // Mutations
   const { mutate: createChat } = useMutation({
     mutationFn: async () => {
       const res = await axios.post("/api/createChat", {
