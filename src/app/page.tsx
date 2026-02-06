@@ -31,8 +31,8 @@ export default function Home() {
     },
   });
 
-  const handleSubmit = (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
+    if (!input.trim()) return;
     createChat();
   };
 
@@ -46,6 +46,12 @@ export default function Home() {
             className="w-full rounded-lg p-3 h-30 focus:outline-none"
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
           ></textarea>
           <div className="flex flex-row items-center justify-between w-full h-12 mb-2">
             <div>
