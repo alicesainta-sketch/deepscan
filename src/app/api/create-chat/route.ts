@@ -8,4 +8,5 @@ export async function POST(req: Request) {
     const newChat = await createChat(title, model, userId);
     return new Response(JSON.stringify({ id: newChat?.id }), { status: 200 });
   }
+  return new Response(null, { status: 200 });
 }
