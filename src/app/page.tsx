@@ -19,7 +19,7 @@ export default function Home() {
   // Mutations
   const { mutate: createChat } = useMutation({
     mutationFn: async () => {
-      const res = await axios.post("/api/createChat", {
+      const res = await axios.post("/api/create-chat", {
         title: input,
         model: model,
       });

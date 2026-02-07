@@ -1,4 +1,4 @@
-import { createChat } from "@/db";
+import { createChat } from "@/index";
 import { auth } from "@clerk/nextjs/server";
 
 export async function POST(req: Request) {
