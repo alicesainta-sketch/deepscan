@@ -49,7 +49,7 @@ const Navibar = (props: Props) => {
             }}
           >
             <p
-              className={`font-extralight text-sm line-clamp-1 ${pathname === `/chat/${chat.id}` ? "text-blue-700" : ""}`}
+              className={`font-extralight text-sm line-clamp-1 ${pathname === `/chat/${chat.id}` ? "text-blue-700" : ""} `}
             >
               {chat?.title}
             </p>

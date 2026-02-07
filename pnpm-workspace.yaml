@@ -1,0 +1,4 @@
+ignoredBuiltDependencies:
+  - '@clerk/shared'
+  - sharp
+  - unrs-resolver
