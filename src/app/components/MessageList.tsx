@@ -5,17 +5,15 @@ import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
-
-type MessagePart = { text?: string };
-type ChatMessage = { id: string; role: string; parts: MessagePart[] };
+import type { UIMessage } from "@ai-sdk/ui-utils";
 
 interface MessageListProps {
-  messages: ChatMessage[];
+  messages: UIMessage[];
 }
 
-function getMessageContent(message: ChatMessage): string {
+function getMessageContent(message: UIMessage): string {
   return message.parts
-    .map((part) => ("text" in part ? part.text : ""))
+    .map((part) => (part.type === "text" ? part.text : ""))
     .join("");
 }
 
@@ -51,7 +49,11 @@ function CodeBlock({
         language={match ? match[1] : "text"}
         style={vscDarkPlus}
         PreTag="div"
-        customStyle={{ margin: 0, borderRadius: "0.5rem", fontSize: "0.875rem" }}
+        customStyle={{
+          margin: 0,
+          borderRadius: "0.5rem",
+          fontSize: "0.875rem",
+        }}
         codeTagProps={{ style: { fontFamily: "inherit" } }}
       >
         {code}
@@ -66,10 +68,11 @@ export default function MessageList({ messages }: MessageListProps) {
       {messages.map((message) => {
         const isAssistant = message.role === "assistant";
         const content = getMessageContent(message);
+
         return (
           <div
             key={message.id}
-            className={`flex flex-row ${
+            className={`flex ${
               isAssistant ? "justify-start mr-12" : "justify-end ml-12"
             }`}
           >
