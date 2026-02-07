@@ -40,7 +40,7 @@ const Navibar = (props: Props) => {
         </p>
       </div>
       <div className="flex flex-col items-center justify-center gap-2 p-6">
-        {chats?.data?.map((chat: ChatModel) => {
+        {chats?.data?.map((chat: ChatModel) => (
           <div
             className="w-full h-10"
             key={chat.id}
@@ -53,8 +53,8 @@ const Navibar = (props: Props) => {
             >
               {chat?.title}
             </p>
-          </div>;
-        })}
+          </div>
+        ))}
       </div>
     </div>
   );
