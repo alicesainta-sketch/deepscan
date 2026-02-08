@@ -1,14 +1,12 @@
 "use client";
 
 import { ChatModel } from "@/db/schema";
-import { useUser } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { usePathname, useRouter } from "next/navigation";
 import React from "react";
 
 const Navibar = () => {
-  const { user } = useUser();
   const router = useRouter();
 
   const { data: chats } = useQuery({
@@ -16,7 +14,7 @@ const Navibar = () => {
     queryFn: async () => {
       return axios.post("/api/get-chats");
     },
-    enabled: !!user?.id,
+    enabled: true,
   });
 
   const pathname = usePathname();
