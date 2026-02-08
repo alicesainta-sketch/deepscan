@@ -25,8 +25,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    <ClerkProvider>
+  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  return publishableKey ? (
+    <ClerkProvider publishableKey={publishableKey}>
       <QueryClientProvider>
         <html lang="en">
           <body
@@ -42,5 +43,20 @@ export default function RootLayout({
         </html>
       </QueryClientProvider>
     </ClerkProvider>
+  ) : (
+    <QueryClientProvider>
+      <html lang="en">
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-row`}
+        >
+          <div className="w-1/5 h-screen bg-gray-50">
+            <Navibar />
+          </div>
+          <div className="w-4/5 h-screen bg-white overflow-auto">
+            {children}
+          </div>
+        </body>
+      </html>
+    </QueryClientProvider>
   );
 }

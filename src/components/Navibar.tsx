@@ -5,12 +5,9 @@ import { useUser } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { usePathname, useRouter } from "next/navigation";
-import { Router } from "next/router";
 import React from "react";
 
-type Props = {};
-
-const Navibar = (props: Props) => {
+const Navibar = () => {
   const { user } = useUser();
   const router = useRouter();
 
