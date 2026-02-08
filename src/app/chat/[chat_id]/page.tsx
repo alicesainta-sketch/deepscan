@@ -1,6 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import type { UIMessage } from "@ai-sdk/ui-utils";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import ChatHeader from "@/app/components/ChatHeader";
@@ -52,7 +53,7 @@ export default function Page() {
               <p className="text-xs">发送一条消息与 AI 助手聊天</p>
             </div>
           ) : (
-            <MessageList messages={(messages ?? []) as unknown[]} />
+            <MessageList messages={(messages ?? []) as UIMessage[]} />
           )}
           {isLoading && (
             <div className="flex justify-start">
