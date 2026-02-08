@@ -52,7 +52,7 @@ export default function Page() {
               <p className="text-xs">发送一条消息与 AI 助手聊天</p>
             </div>
           ) : (
-            <MessageList messages={messages ?? []} />
+            <MessageList messages={(messages ?? []) as unknown[]} />
           )}
           {isLoading && (
             <div className="flex justify-start">
