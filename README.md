@@ -4,11 +4,11 @@
 
 ## 功能
 
-- 聊天与流式输出：后端使用 AI SDK `streamText` 输出 UI 消息流，前端使用 `useChat` 接收 [chat/route.ts](file:///Users/purpleplane/code/deepscan/src/app/api/chat/route.ts)
-- 模型切换：支持在 deepseek-v3 与 deepseek-r1 间一键切换 [page.tsx](file:///Users/purpleplane/code/deepscan/src/app/page.tsx)
-- Markdown 与代码高亮、复制按钮：[MessageList.tsx](file:///Users/purpleplane/code/deepscan/src/app/components/MessageList.tsx)
-- 聊天历史：创建聊天并在侧栏展示历史，点击进入对应会话 [create-chat/route.ts](file:///Users/purpleplane/code/deepscan/src/app/api/create-chat/route.ts) [get-chats/route.ts](file:///Users/purpleplane/code/deepscan/src/app/api/get-chats/route.ts) [Navibar.tsx](file:///Users/purpleplane/code/deepscan/src/components/Navibar.tsx)
-- 认证中间件：可选启用 Clerk 保护，未配置发布密钥时自动回退以保证构建通过 [layout.tsx](file:///Users/purpleplane/code/deepscan/src/app/layout.tsx) [proxy.ts](file:///Users/purpleplane/code/deepscan/src/proxy.ts)
+- 聊天与流式输出：后端使用 AI SDK `streamText` 输出 UI 消息流，前端使用 `useChat` 接收（src/app/api/chat/route.ts）
+- 模型切换：支持在 deepseek-v3 与 deepseek-r1 间一键切换（src/app/page.tsx）
+- Markdown 与代码高亮、复制按钮（src/app/components/MessageList.tsx）
+- 聊天历史：创建聊天并在侧栏展示历史，点击进入对应会话（src/app/api/create-chat/route.ts、src/app/api/get-chats/route.ts、src/components/Navibar.tsx）
+- 认证中间件：可选启用 Clerk 保护，未配置发布密钥时自动回退以保证构建通过（src/app/layout.tsx、src/proxy.ts）
 
 ## 技术栈
 
@@ -62,13 +62,13 @@ pnpm run build
 pnpm start
 ```
 
-默认地址 http://localhost:3000
+默认地址：localhost:3000
 
 ## 使用说明
 
-- 首页输入聊天标题，选择模型后创建会话，自动跳转聊天页 [page.tsx](file:///Users/purpleplane/code/deepscan/src/app/page.tsx)
-- 聊天页输入消息并发送，支持 Shift+Enter 换行；侧栏可切换历史会话 [chat/[chat_id]/page.tsx](file:///Users/purpleplane/code/deepscan/src/app/chat/%5Bchat_id%5D/page.tsx)
-- 代码块支持高亮与一键复制 [MessageList.tsx](file:///Users/purpleplane/code/deepscan/src/app/components/MessageList.tsx)
+- 首页输入聊天标题，选择模型后创建会话，自动跳转聊天页（src/app/page.tsx）
+- 聊天页输入消息并发送，支持 Shift+Enter 换行；侧栏可切换历史会话（src/app/chat/[chat_id]/page.tsx）
+- 代码块支持高亮与一键复制（src/app/components/MessageList.tsx）
 
 ## 注意事项
 
