@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
-import type { UIMessage } from "@ai-sdk/ui-utils";
+import type { UIMessage } from "ai";
 
 interface MessageListProps {
   messages: UIMessage[];
@@ -89,14 +89,16 @@ export default function MessageList({ messages }: MessageListProps) {
                     remarkPlugins={[remarkGfm]}
                     components={{
                       code({
+                        inline,
                         className,
                         children,
                         ...props
                       }: {
+                        inline?: boolean;
                         className?: string;
                         children?: React.ReactNode;
                       }) {
-                        const isInline = !className;
+                        const isInline = Boolean(inline);
                         if (isInline) {
                           return (
                             <code

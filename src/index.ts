@@ -1,10 +1,28 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import { chatsTable, messagesTable } from "./db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import type { ChatModel, MessageModel } from "@/types/chat";
 
-const client = postgres(process.env.DATABASE_URL!);
-const db = drizzle({ client });
+type InMemoryStore = {
+  chatsByUser: Map<string, ChatModel[]>;
+  messagesByChat: Map<number, MessageModel[]>;
+  nextChatId: number;
+  nextMessageId: number;
+};
+
+const globalStore = globalThis as typeof globalThis & {
+  __deepscanStore?: InMemoryStore;
+};
+
+const store: InMemoryStore =
+  globalStore.__deepscanStore ??
+  ({
+    chatsByUser: new Map<string, ChatModel[]>(),
+    messagesByChat: new Map<number, MessageModel[]>(),
+    nextChatId: 1,
+    nextMessageId: 1,
+  } as InMemoryStore);
+
+if (!globalStore.__deepscanStore) {
+  globalStore.__deepscanStore = store;
+}
 
 export const createChat = async (
   title: string,
@@ -12,14 +30,15 @@ export const createChat = async (
   model: string
 ) => {
   try {
-    const [newChat] = await db
-      .insert(chatsTable)
-      .values({
-        title,
-        userId,
-        model,
-      })
-      .returning();
+    const newChat: ChatModel = {
+      id: store.nextChatId++,
+      userId,
+      title,
+      model,
+    };
+
+    const existingChats = store.chatsByUser.get(userId) ?? [];
+    store.chatsByUser.set(userId, [newChat, ...existingChats]);
     return newChat;
   } catch (error) {
     console.error("Error creating chat:", error);
@@ -29,14 +48,8 @@ export const createChat = async (
 
 export const getChat = async (chatId: number, userId: string) => {
   try {
-    const chat = await db
-      .select()
-      .from(chatsTable)
-      .where(and(eq(chatsTable.id, chatId), eq(chatsTable.userId, userId)));
-    if (chat.length === 0) {
-      return null;
-    }
-    return chat[0];
+    const chats = store.chatsByUser.get(userId) ?? [];
+    return chats.find((chat) => chat.id === chatId) ?? null;
   } catch (error) {
     console.error("Error getting chat:", error);
     return null;
@@ -45,33 +58,28 @@ export const getChat = async (chatId: number, userId: string) => {
 
 export const getChats = async (userId: string) => {
   try {
-    const chats = await db
-      .select()
-      .from(chatsTable)
-      .where(eq(chatsTable.userId, userId))
-      .orderBy(desc(chatsTable.id));
-    return chats;
+    return [...(store.chatsByUser.get(userId) ?? [])].sort((a, b) => b.id - a.id);
   } catch (error) {
     console.error("Error getting chats:", error);
     return [];
   }
 };
 
-// messages
 export const createMessage = async (
-  chat_id: number,
+  chatId: number,
   content: string,
   role: string
 ) => {
   try {
-    const [newMessage] = await db
-      .insert(messagesTable)
-      .values({
-        content: content,
-        chatId: chat_id,
-        role: role,
-      })
-      .returning();
+    const newMessage: MessageModel = {
+      id: store.nextMessageId++,
+      chatId,
+      role,
+      content,
+    };
+
+    const existingMessages = store.messagesByChat.get(chatId) ?? [];
+    store.messagesByChat.set(chatId, [...existingMessages, newMessage]);
     return newMessage;
   } catch (error) {
     console.log("error createMessage", error);
@@ -81,13 +89,11 @@ export const createMessage = async (
 
 export const getMessagesByChatId = async (chatId: number) => {
   try {
-    const messages = await db
-      .select()
-      .from(messagesTable)
-      .where(eq(messagesTable.chatId, chatId));
-    return messages;
+    return [...(store.messagesByChat.get(chatId) ?? [])].sort(
+      (a, b) => a.id - b.id
+    );
   } catch (error) {
     console.log("error getMessagesByChatId", error);
-    return null;
+    return [];
   }
 };

@@ -1,24 +1,41 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import type { UIMessage } from "@ai-sdk/ui-utils";
+import type { UIMessage } from "ai";
 import { useParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ChatHeader from "@/app/components/ChatHeader";
 import ErrorDisplay from "@/app/components/ErrorDisplay";
 import InputField from "@/app/components/InputField";
 import LoadingIndicator from "@/app/components/LoadingIndicator";
 import MessageList from "@/app/components/MessageList";
 
-export default function Page() {
-  const params = useParams();
-  const chatId = params?.chat_id as string | undefined;
+const getChatStorageKey = (id: string) => `deepscan:chat:${id}:messages`;
+
+const parseStoredMessages = (value: string | null): UIMessage[] => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? (parsed as UIMessage[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+function ChatSession({ chatId }: { chatId: string }) {
   const [input, setInput] = useState("");
   const [model, setModel] = useState("deepseek-v3");
+  const initialMessages = useMemo(() => {
+    if (typeof window === "undefined") return [];
+    return parseStoredMessages(localStorage.getItem(getChatStorageKey(chatId)));
+  }, [chatId]);
+
   const { messages, sendMessage, error, status, stop, clearError } = useChat({
     id: chatId,
+    messages: initialMessages,
     onError: (err) => console.error("Chat error:", err),
   });
+
   const isLoading = status === "streaming" || status === "submitted";
   const handleChangeModel = () => {
     setModel(model === "deepseek-v3" ? "deepseek-r1" : "deepseek-v3");
@@ -26,9 +43,17 @@ export default function Page() {
 
   const endRef = useRef<HTMLDivElement>(null);
   const messageCount = messages?.length ?? 0;
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messageCount]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    localStorage.setItem(getChatStorageKey(chatId), JSON.stringify(messages ?? []));
+  }, [chatId, messages]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,4 +99,20 @@ export default function Page() {
       </div>
     </div>
   );
+}
+
+export default function Page() {
+  const params = useParams();
+  const rawChatId = params?.chat_id;
+  const chatId = Array.isArray(rawChatId) ? rawChatId[0] : rawChatId;
+
+  if (!chatId) {
+    return (
+      <div className="flex h-screen items-center justify-center text-sm text-slate-500">
+        无效会话 ID
+      </div>
+    );
+  }
+
+  return <ChatSession key={chatId} chatId={chatId} />;
 }
