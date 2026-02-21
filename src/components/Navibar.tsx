@@ -9,10 +9,11 @@ import React from "react";
 const Navibar = () => {
   const router = useRouter();
 
-  const { data: chats } = useQuery({
+  const { data: chats = [] } = useQuery<ChatModel[]>({
     queryKey: ["chats"],
     queryFn: async () => {
-      return axios.post("/api/get-chats");
+      const response = await axios.post<ChatModel[]>("/api/get-chats");
+      return Array.isArray(response.data) ? response.data : [];
     },
     enabled: true,
   });
@@ -35,7 +36,7 @@ const Navibar = () => {
         </p>
       </div>
       <div className="flex flex-col items-center justify-center gap-2 p-6">
-        {chats?.data?.map((chat: ChatModel) => (
+        {chats.map((chat: ChatModel) => (
           <div
             className="w-full h-10"
             key={chat.id}
