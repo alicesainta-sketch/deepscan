@@ -40,7 +40,7 @@ function CodeBlock({
         <button
           type="button"
           onClick={handleCopy}
-          className="rounded bg-gray-700 px-2 py-1 text-xs text-gray-200 hover:bg-gray-600"
+          className="rounded bg-gray-700 px-2 py-1 text-xs text-gray-200 hover:bg-gray-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
         >
           {copied ? "已复制" : "复制"}
         </button>
@@ -79,8 +79,8 @@ export default function MessageList({ messages }: MessageListProps) {
             <div
               className={`max-w-[85%] rounded-lg px-4 py-2 ${
                 isAssistant
-                  ? "bg-blue-100 text-gray-900"
-                  : "bg-slate-200 text-gray-900"
+                  ? "bg-blue-100 text-gray-900 dark:bg-blue-900/30 dark:text-slate-100"
+                  : "bg-slate-200 text-gray-900 dark:bg-slate-700 dark:text-slate-100"
               }`}
             >
               <div className="prose prose-sm max-w-none break-words dark:prose-invert">
@@ -102,7 +102,7 @@ export default function MessageList({ messages }: MessageListProps) {
                         if (isInline) {
                           return (
                             <code
-                              className="rounded bg-gray-200 px-1 py-0.5 font-mono text-sm dark:bg-gray-700"
+                              className="rounded bg-gray-200 px-1 py-0.5 font-mono text-sm dark:bg-slate-700"
                               {...props}
                             >
                               {children}

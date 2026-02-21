@@ -208,7 +208,7 @@ function ChatSession({
   };
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col bg-slate-50 dark:bg-slate-900">
       <ChatHeader
         status={isLoading ? "loading" : "idle"}
         model={model}
@@ -219,7 +219,7 @@ function ChatSession({
           {error && <ErrorDisplay error={error} onDismiss={clearError} />}
           {persistError ? <ErrorDisplay error={persistError} /> : null}
           {messages?.length === 0 && !error ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-gray-500">
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-gray-500 dark:text-slate-400">
               <p className="text-sm">开始新对话</p>
               <p className="text-xs">发送一条消息与 AI 助手聊天</p>
             </div>
@@ -255,7 +255,7 @@ export default function Page() {
 
   if (!routeChatId) {
     return (
-      <div className="flex h-screen items-center justify-center text-sm text-slate-500">
+      <div className="flex h-screen items-center justify-center text-sm text-slate-500 dark:text-slate-400">
         无效会话 ID
       </div>
     );
