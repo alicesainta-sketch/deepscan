@@ -21,13 +21,20 @@ const Navbar = () => {
   const shouldLoadChats =
     isLoaded && Boolean(userId) && !pathname.startsWith("/sign-in");
 
-  const { data: chats = [] } = useQuery<ChatModel[]>({
+  const {
+    data: chats = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<ChatModel[]>({
     queryKey: ["chats"],
     queryFn: async () => {
       const response = await axios.post<ChatModel[]>("/api/get-chats");
       return Array.isArray(response.data) ? response.data : [];
     },
     enabled: shouldLoadChats,
+    retry: 1,
+    staleTime: 10_000,
   });
 
   const handleCreateNewChat = () => {
@@ -82,12 +89,32 @@ const Navbar = () => {
       </div>
 
       <div className="mt-2 flex-1 space-y-1 overflow-y-auto px-3 pb-4">
-        {shouldLoadChats && chats.length === 0 ? (
+        {shouldLoadChats && isLoading ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+            正在加载历史对话...
+          </div>
+        ) : null}
+        {shouldLoadChats && isError ? (
+          <div className="space-y-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-700/70 dark:bg-red-900/30 dark:text-red-300">
+            <p>历史对话加载失败</p>
+            <button
+              type="button"
+              className="rounded-lg border border-red-300 px-2 py-1 text-xs transition hover:bg-red-100 dark:border-red-600 dark:hover:bg-red-900/50"
+              onClick={() => {
+                void refetch();
+              }}
+            >
+              重试
+            </button>
+          </div>
+        ) : null}
+        {shouldLoadChats && !isLoading && !isError && chats.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
             还没有历史对话，先创建一个新会话。
           </div>
         ) : null}
-        {chats.map((chat: ChatModel) => (
+        {!isError &&
+          chats.map((chat: ChatModel) => (
           <button
             type="button"
             className={`group flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition ${
@@ -110,7 +137,7 @@ const Navbar = () => {
             />
             <p className="line-clamp-1 text-sm font-medium">{chat?.title}</p>
           </button>
-        ))}
+          ))}
       </div>
 
       <div className="border-t border-slate-200 px-5 py-3 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">

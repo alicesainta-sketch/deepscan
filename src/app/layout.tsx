@@ -4,6 +4,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import Navbar from "@/components/Navbar";
 import QueryClientProvider from "@/components/QueryClientProvider";
 import ThemeProvider from "@/components/ThemeProvider";
+import ThemeScript from "@/components/ThemeScript";
 
 export const metadata: Metadata = {
   title: "DeepScan",
@@ -21,6 +22,7 @@ export default function RootLayout({
       <QueryClientProvider>
         <html lang="en" suppressHydrationWarning>
           <body className="min-h-screen bg-slate-100 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+            <ThemeScript />
             <ThemeProvider>
               <div className="mx-auto flex h-screen w-full flex-col md:flex-row">
                 <aside className="h-60 w-full md:h-screen md:w-[320px]">
@@ -39,6 +41,7 @@ export default function RootLayout({
     <QueryClientProvider>
       <html lang="en" suppressHydrationWarning>
         <body className="min-h-screen bg-slate-100 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+          <ThemeScript />
           <ThemeProvider>
             <div className="mx-auto flex h-screen w-full flex-col md:flex-row">
               <aside className="h-60 w-full md:h-screen md:w-[320px]">

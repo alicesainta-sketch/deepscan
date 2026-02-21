@@ -5,7 +5,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { UIMessage } from "ai";
 import axios from "axios";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import ChatHeader from "@/app/components/ChatHeader";
 import ErrorDisplay from "@/app/components/ErrorDisplay";
 import InputField from "@/app/components/InputField";
@@ -43,17 +49,23 @@ const hasAssistantResponse = (messages: UIMessage[]) =>
 
 const MAX_DRAFT_PERSIST_RETRIES = 3;
 const DRAFT_PERSIST_RETRY_DELAY_MS = 1500;
+const subscribeHydration = () => () => {};
+
+const useIsHydrated = () =>
+  useSyncExternalStore(subscribeHydration, () => true, () => false);
 
 function ChatSession({
   routeChatId,
   draftId,
   initialPrompt,
   initialModel,
+  initialMessages,
 }: {
   routeChatId: string;
   draftId?: string;
   initialPrompt?: string;
   initialModel: "deepseek-v3" | "deepseek-r1";
+  initialMessages: UIMessage[];
 }) {
   const isDraftSession = routeChatId === "new";
   const sessionId = isDraftSession ? `draft:${draftId ?? "default"}` : routeChatId;
@@ -67,11 +79,6 @@ function ChatSession({
   const draftPersistStateRef = useRef<"idle" | "pending" | "done">("idle");
   const persistRetryCountRef = useRef(0);
   const persistRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const initialMessages = useMemo(() => {
-    if (typeof window === "undefined") return [];
-    return parseStoredMessages(localStorage.getItem(getChatStorageKey(sessionId)));
-  }, [sessionId]);
 
   const { messages, sendMessage, error, status, stop, clearError } = useChat({
     id: sessionId,
@@ -215,7 +222,7 @@ function ChatSession({
         onModelToggle={handleChangeModel}
       />
       <div className="flex flex-1 flex-col items-center overflow-hidden">
-        <div className="flex w-2/3 flex-1 flex-col gap-4 overflow-auto py-4">
+        <div className="flex w-full max-w-4xl flex-1 flex-col gap-4 overflow-auto px-4 py-4 md:px-6">
           {error && <ErrorDisplay error={error} onDismiss={clearError} />}
           {persistError ? <ErrorDisplay error={persistError} /> : null}
           {messages?.length === 0 && !error ? (
@@ -233,7 +240,7 @@ function ChatSession({
           )}
           <div ref={endRef} className="h-4" />
         </div>
-        <div className="w-2/3 shrink-0 pb-4">
+        <div className="w-full max-w-4xl shrink-0 px-4 pb-4 md:px-6">
           <InputField
             input={input}
             onInputChange={setInput}
@@ -244,6 +251,45 @@ function ChatSession({
         </div>
       </div>
     </div>
+  );
+}
+
+function HydratedChatSession({
+  routeChatId,
+  draftId,
+  initialPrompt,
+  initialModel,
+}: {
+  routeChatId: string;
+  draftId?: string;
+  initialPrompt?: string;
+  initialModel: "deepseek-v3" | "deepseek-r1";
+}) {
+  const isHydrated = useIsHydrated();
+  const isDraftSession = routeChatId === "new";
+  const sessionId = isDraftSession ? `draft:${draftId ?? "default"}` : routeChatId;
+
+  const initialMessages = useMemo(() => {
+    if (!isHydrated) return [];
+    return parseStoredMessages(localStorage.getItem(getChatStorageKey(sessionId)));
+  }, [isHydrated, sessionId]);
+
+  if (!isHydrated) {
+    return (
+      <div className="flex h-screen items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+        正在加载会话...
+      </div>
+    );
+  }
+
+  return (
+    <ChatSession
+      routeChatId={routeChatId}
+      draftId={draftId}
+      initialPrompt={initialPrompt}
+      initialModel={initialModel}
+      initialMessages={initialMessages}
+    />
   );
 }
 
@@ -269,7 +315,7 @@ export default function Page() {
     routeChatId === "new" ? `${routeChatId}:${draftId ?? "default"}` : routeChatId;
 
   return (
-    <ChatSession
+    <HydratedChatSession
       key={sessionKey}
       routeChatId={routeChatId}
       draftId={draftId}
