@@ -9,7 +9,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@ai-sdk/deepseek": "^2.0.15",
     "@ai-sdk/openai-compatible": "^2.0.26",
     "@ai-sdk/react": "^3.0.64",
     "@ai-sdk/ui-utils": "^1.2.11",
@@ -21,9 +20,7 @@
     "@tanstack/react-query": "^5.90.20",
     "ai": "^6.0.62",
     "axios": "^1.13.4",
-    "drizzle-orm": "^0.45.1",
     "next": "16.1.6",
-    "postgres": "^3.4.8",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-markdown": "^10.0.0",
@@ -36,7 +33,6 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/react-syntax-highlighter": "^15.5.13",
-    "drizzle-kit": "^0.31.8",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",

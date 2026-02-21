@@ -4,10 +4,3 @@ export interface ChatModel {
   title: string;
   model: string;
 }
-
-export interface MessageModel {
-  id: number;
-  chatId: number;
-  role: string;
-  content: string;
-}

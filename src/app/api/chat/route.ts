@@ -24,14 +24,24 @@ export async function POST(req: Request) {
     );
   }
 
+  let body: unknown;
   try {
-    const body = await req.json();
-    const messages = Array.isArray(body?.messages) ? body.messages : [];
-    const model =
-      body?.model === "deepseek-r1" || body?.model === "deepseek-v3"
-        ? body.model
-        : "deepseek-v3";
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "Invalid request payload" }, { status: 400 });
+  }
 
+  const payload =
+    body && typeof body === "object"
+      ? (body as { messages?: unknown; model?: unknown })
+      : {};
+  const messages = Array.isArray(payload.messages) ? payload.messages : [];
+  const model =
+    payload.model === "deepseek-r1" || payload.model === "deepseek-v3"
+      ? payload.model
+      : "deepseek-v3";
+
+  try {
     const result = await streamText({
       model: deepseekClient(model),
       system: "You are a helpful assistant.",
@@ -40,7 +50,7 @@ export async function POST(req: Request) {
 
     return result.toUIMessageStreamResponse();
   } catch (error) {
-    console.error("Chat API error:", error);
-    return Response.json({ error: "Invalid request payload" }, { status: 400 });
+    console.error("Chat API upstream error:", error);
+    return Response.json({ error: "Upstream model request failed" }, { status: 502 });
   }
 }

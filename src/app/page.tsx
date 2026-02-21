@@ -3,45 +3,23 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import EastIcon from "@mui/icons-material/East";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
 
 export default function Home() {
   const router = useRouter();
   const [input, setInput] = useState("");
   const [model, setModel] = useState("deepseek-v3");
-  const [submitError, setSubmitError] = useState("");
-  const queryClient = useQueryClient();
-
-  // Mutations
-  const { mutate: createChat, isPending } = useMutation({
-    mutationFn: async () => {
-      const res = await axios.post<{ id?: number; error?: string }>(
-        "/api/create-chat",
-        {
-          title: input,
-          model: model,
-        }
-      );
-      return res.data;
-    },
-    onSuccess: (data) => {
-      if (!data?.id) {
-        setSubmitError(data?.error ?? "创建会话失败，请稍后重试");
-        return;
-      }
-      setSubmitError("");
-      router.push(`/chat/${data.id}`);
-      queryClient.invalidateQueries({ queryKey: ["chats"] });
-    },
-    onError: () => {
-      setSubmitError("创建会话失败，请稍后重试");
-    },
-  });
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const handleSubmit = () => {
-    if (!input.trim() || isPending) return;
-    createChat();
+    const question = input.trim();
+    if (!question || isNavigating) return;
+    setIsNavigating(true);
+    const query = new URLSearchParams({
+      q: question,
+      model,
+      draftId: Date.now().toString(36),
+    }).toString();
+    router.push(`/chat/new?${query}`);
   };
 
   return (
@@ -64,7 +42,7 @@ export default function Home() {
             className="h-36 w-full resize-none rounded-xl border border-transparent bg-white px-4 py-3 text-slate-800 outline-none ring-0 transition focus:border-slate-200"
             placeholder="给 DeepSeek 发一条消息..."
             value={input}
-            disabled={isPending}
+            disabled={isNavigating}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -102,21 +80,15 @@ export default function Home() {
 
             <button
               type="button"
-              disabled={isPending || !input.trim()}
+              disabled={isNavigating || !input.trim()}
               className="inline-flex items-center justify-center gap-1 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
               onClick={handleSubmit}
               aria-label="创建对话"
             >
-              {isPending ? "创建中" : "创建并进入"}
+              {isNavigating ? "跳转中" : "发送并进入"}
               <EastIcon fontSize="small" />
             </button>
           </div>
-
-          {submitError ? (
-            <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-              {submitError}
-            </p>
-          ) : null}
         </div>
       </div>
     </div>

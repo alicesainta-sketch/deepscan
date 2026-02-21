@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { usePathname, useRouter } from "next/navigation";
 import React from "react";
@@ -13,7 +13,6 @@ const Navbar = () => {
   const router = useRouter();
   const pathname = usePathname();
   const { isLoaded, userId } = useAuth();
-  const queryClient = useQueryClient();
 
   const shouldLoadChats =
     isLoaded && Boolean(userId) && !pathname.startsWith("/sign-in");
@@ -27,31 +26,11 @@ const Navbar = () => {
     enabled: shouldLoadChats,
   });
 
-  const { mutate: createNewChat, isPending: isCreatingChat } = useMutation({
-    mutationFn: async () => {
-      const response = await axios.post<{ id?: number; error?: string }>(
-        "/api/create-chat",
-        {
-          title: "新对话",
-          model: "deepseek-v3",
-        }
-      );
-      return response.data;
-    },
-    onSuccess: (data) => {
-      if (!data?.id) {
-        return;
-      }
-      queryClient.invalidateQueries({ queryKey: ["chats"] });
-      router.push(`/chat/${data.id}`);
-    },
-  });
-
   const handleCreateNewChat = () => {
-    if (!userId || isCreatingChat) {
+    if (!userId) {
       return;
     }
-    createNewChat();
+    router.push(`/chat/new?draftId=${Date.now().toString(36)}`);
   };
 
   return (
@@ -70,10 +49,10 @@ const Navbar = () => {
           type="button"
           className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-900 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
           onClick={handleCreateNewChat}
-          disabled={!userId || isCreatingChat}
+          disabled={!userId}
         >
           <AddIcon fontSize="small" />
-          {isCreatingChat ? "创建中..." : "创建新对话"}
+          创建新对话
         </button>
       </div>
 
