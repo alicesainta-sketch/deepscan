@@ -43,6 +43,15 @@ const getFirstUserMessageText = (messages: UIMessage[]) => {
   return userMessage ? getMessageText(userMessage) : "";
 };
 
+const getLastUserMessageText = (messages: UIMessage[]) => {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i].role === "user") {
+      return getMessageText(messages[i]);
+    }
+  }
+  return "";
+};
+
 const hasAssistantResponse = (messages: UIMessage[]) =>
   messages.some(
     (message) => message.role === "assistant" && getMessageText(message).length > 0
@@ -88,6 +97,10 @@ function ChatSession({
   const isLoading = status === "streaming" || status === "submitted";
   const endRef = useRef<HTMLDivElement>(null);
   const messageCount = messages?.length ?? 0;
+  const lastUserMessageText = useMemo(
+    () => getLastUserMessageText(messages ?? []),
+    [messages]
+  );
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -205,6 +218,13 @@ function ChatSession({
     setInput("");
   };
 
+  const handleRetryLastPrompt = () => {
+    if (isLoading || !lastUserMessageText) return;
+    setPersistError("");
+    persistRetryCountRef.current = 0;
+    sendMessage({ text: lastUserMessageText }, { body: { model } });
+  };
+
   return (
     <div className="flex h-screen flex-col bg-slate-50 dark:bg-slate-900">
       <ChatHeader
@@ -232,6 +252,16 @@ function ChatSession({
           <div ref={endRef} className="h-4" />
         </div>
         <div className="w-full max-w-4xl shrink-0 px-4 pb-4 md:px-6">
+          <div className="mb-2 flex items-center justify-end">
+            <button
+              type="button"
+              onClick={handleRetryLastPrompt}
+              disabled={isLoading || !lastUserMessageText}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              重试上一问
+            </button>
+          </div>
           <InputField
             input={input}
             onInputChange={setInput}
