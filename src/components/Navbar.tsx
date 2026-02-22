@@ -1,10 +1,15 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import React from "react";
+import {
+  deleteLocalChat,
+  getChatScope,
+  listChats,
+  updateLocalChat,
+} from "@/lib/chatStore";
 import type { ChatModel } from "@/types/chat";
 import AddIcon from "@mui/icons-material/Add";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
@@ -30,8 +35,9 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
-  const { isLoaded, userId } = useAuth();
+  const { userId } = useAuth();
   const { theme, isHydrated, toggleTheme } = useTheme();
+  const chatScope = getChatScope(userId);
   const [keyword, setKeyword] = React.useState("");
   const [editingChatId, setEditingChatId] = React.useState<number | null>(null);
   const [draftTitle, setDraftTitle] = React.useState("");
@@ -44,8 +50,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     setDraftTitle("");
   }, [collapsed]);
 
-  const shouldLoadChats =
-    isLoaded && Boolean(userId) && !pathname.startsWith("/sign-in");
+  const shouldLoadChats = !pathname.startsWith("/sign-in");
 
   const {
     data: chats = [],
@@ -53,40 +58,11 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     isError,
     refetch,
   } = useQuery<ChatModel[]>({
-    queryKey: ["chats"],
-    queryFn: async () => {
-      const response = await axios.post<ChatModel[]>("/api/get-chats");
-      return Array.isArray(response.data) ? response.data : [];
-    },
+    queryKey: ["chats", chatScope],
+    queryFn: async () => listChats(chatScope),
     enabled: shouldLoadChats,
     retry: 1,
     staleTime: 10_000,
-  });
-
-  const updateChatMutation = useMutation({
-    mutationFn: async ({
-      chatId,
-      title,
-      pinned,
-    }: {
-      chatId: number;
-      title?: string;
-      pinned?: boolean;
-    }) => {
-      await axios.post("/api/update-chat", { chatId, title, pinned });
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["chats"] });
-    },
-  });
-
-  const deleteChatMutation = useMutation({
-    mutationFn: async (chatId: number) => {
-      await axios.post("/api/delete-chat", { chatId });
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["chats"] });
-    },
   });
 
   const filteredChats = React.useMemo(() => {
@@ -101,9 +77,6 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
   }, [chats, keyword]);
 
   const handleCreateNewChat = () => {
-    if (!userId) {
-      return;
-    }
     router.push(`/chat/new?draftId=${Date.now().toString(36)}`);
   };
 
@@ -112,12 +85,9 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     setBusyChatId(chatId);
     try {
       await task();
+      await queryClient.invalidateQueries({ queryKey: ["chats", chatScope] });
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        setActionError(error.response?.data?.error ?? "操作失败，请重试");
-      } else {
-        setActionError("操作失败，请重试");
-      }
+      setActionError(error instanceof Error ? error.message : "操作失败，请重试");
     } finally {
       setBusyChatId(null);
     }
@@ -125,10 +95,12 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
 
   const handleTogglePin = async (chat: ChatModel) => {
     await runAction(chat.id, async () => {
-      await updateChatMutation.mutateAsync({
-        chatId: chat.id,
+      const updated = await updateLocalChat(chatScope, chat.id, {
         pinned: !chat.pinned,
       });
+      if (!updated) {
+        throw new Error("置顶操作失败，请重试");
+      }
     });
   };
 
@@ -151,10 +123,12 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     }
 
     await runAction(chatId, async () => {
-      await updateChatMutation.mutateAsync({
-        chatId,
+      const updated = await updateLocalChat(chatScope, chatId, {
         title: nextTitle,
       });
+      if (!updated) {
+        throw new Error("重命名失败，请重试");
+      }
       setEditingChatId(null);
       setDraftTitle("");
     });
@@ -166,7 +140,10 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     }
 
     await runAction(chatId, async () => {
-      await deleteChatMutation.mutateAsync(chatId);
+      const removed = await deleteLocalChat(chatScope, chatId);
+      if (!removed) {
+        throw new Error("删除失败，会话不存在");
+      }
       if (pathname === `/chat/${chatId}`) {
         router.push("/");
       }
@@ -181,7 +158,6 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
             type="button"
             className="flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-900 text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
             onClick={handleCreateNewChat}
-            disabled={!userId}
             aria-label="创建新对话"
             title="创建新对话"
           >
@@ -212,7 +188,6 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
           type="button"
           className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-900 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
           onClick={handleCreateNewChat}
-          disabled={!userId}
         >
           <AddIcon fontSize="small" />
           创建新对话
@@ -535,7 +510,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
             {collapsed ? userId.slice(0, 6) : `用户: ${userId}`}
           </p>
         ) : (
-          <p>{collapsed ? "未登" : "未登录"}</p>
+          <p>{collapsed ? "访客" : "访客模式"}</p>
         )}
       </div>
     </div>

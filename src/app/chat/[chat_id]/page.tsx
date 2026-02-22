@@ -1,9 +1,9 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { useAuth } from "@clerk/nextjs";
 import { useQueryClient } from "@tanstack/react-query";
 import type { UIMessage } from "ai";
-import axios from "axios";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   useEffect,
@@ -17,6 +17,7 @@ import ErrorDisplay from "@/app/components/ErrorDisplay";
 import InputField from "@/app/components/InputField";
 import LoadingIndicator from "@/app/components/LoadingIndicator";
 import MessageList from "@/app/components/MessageList";
+import { createLocalChat, getChatScope } from "@/lib/chatStore";
 
 const getChatStorageKey = (sessionId: string) =>
   `deepscan:chat:${sessionId}:messages`;
@@ -60,12 +61,14 @@ function ChatSession({
   initialPrompt,
   initialModel,
   initialMessages,
+  chatScope,
 }: {
   routeChatId: string;
   draftId?: string;
   initialPrompt?: string;
   initialModel: "deepseek-v3" | "deepseek-r1";
   initialMessages: UIMessage[];
+  chatScope: string;
 }) {
   const isDraftSession = routeChatId === "new";
   const sessionId = isDraftSession ? `draft:${draftId ?? "default"}` : routeChatId;
@@ -135,18 +138,9 @@ function ChatSession({
       const title = (firstUserText || "新对话").slice(0, 40);
 
       try {
-        const response = await axios.post<{ id?: number; error?: string }>(
-          "/api/create-chat",
-          {
-            title,
-            model,
-          }
-        );
-
-        const newChatId = response.data?.id;
-        if (!newChatId) {
-          throw new Error(response.data?.error ?? "创建历史会话失败，请重试");
-        }
+        const created = await createLocalChat(chatScope, { title, model });
+        const newChatId = created?.id;
+        if (!newChatId) throw new Error("创建历史会话失败，请重试");
 
         draftPersistStateRef.current = "done";
         persistRetryCountRef.current = 0;
@@ -161,7 +155,7 @@ function ChatSession({
           localStorage.removeItem(getChatStorageKey(sessionId));
         }
 
-        await queryClient.invalidateQueries({ queryKey: ["chats"] });
+        await queryClient.invalidateQueries({ queryKey: ["chats", chatScope] });
         router.replace(`/chat/${newChatId}`);
       } catch {
         draftPersistStateRef.current = "idle";
@@ -195,6 +189,7 @@ function ChatSession({
     isLoading,
     messages,
     model,
+    chatScope,
     persistRetryTick,
     queryClient,
     router,
@@ -266,6 +261,8 @@ function HydratedChatSession({
   initialModel: "deepseek-v3" | "deepseek-r1";
 }) {
   const isHydrated = useIsHydrated();
+  const { userId } = useAuth();
+  const chatScope = getChatScope(userId);
   const isDraftSession = routeChatId === "new";
   const sessionId = isDraftSession ? `draft:${draftId ?? "default"}` : routeChatId;
 
@@ -289,6 +286,7 @@ function HydratedChatSession({
       initialPrompt={initialPrompt}
       initialModel={initialModel}
       initialMessages={initialMessages}
+      chatScope={chatScope}
     />
   );
 }
