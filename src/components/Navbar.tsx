@@ -6,7 +6,9 @@ import { usePathname, useRouter } from "next/navigation";
 import React from "react";
 import {
   deleteLocalChat,
+  exportLocalChats,
   getChatScope,
+  importLocalChats,
   listChats,
   updateLocalChat,
 } from "@/lib/chatStore";
@@ -18,6 +20,8 @@ import CloseIcon from "@mui/icons-material/Close";
 import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
+import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
 import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrowLeft";
 import KeyboardDoubleArrowRightIcon from "@mui/icons-material/KeyboardDoubleArrowRight";
 import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
@@ -31,6 +35,53 @@ type NavbarProps = {
   onToggleCollapse: () => void;
 };
 
+type ChatGroup = {
+  key: string;
+  label: string;
+  chats: ChatModel[];
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const groupChatsByRecency = (chats: ChatModel[]): ChatGroup[] => {
+  const now = Date.now();
+  const pinned: ChatModel[] = [];
+  const today: ChatModel[] = [];
+  const last7Days: ChatModel[] = [];
+  const last30Days: ChatModel[] = [];
+  const older: ChatModel[] = [];
+
+  chats.forEach((chat) => {
+    if (chat.pinned) {
+      pinned.push(chat);
+      return;
+    }
+
+    const dayDiff = Math.max(0, Math.floor((now - chat.updatedAt) / DAY_MS));
+    if (dayDiff <= 0) {
+      today.push(chat);
+      return;
+    }
+    if (dayDiff <= 7) {
+      last7Days.push(chat);
+      return;
+    }
+    if (dayDiff <= 30) {
+      last30Days.push(chat);
+      return;
+    }
+    older.push(chat);
+  });
+
+  return [
+    { key: "pinned", label: "置顶", chats: pinned },
+    { key: "today", label: "今天", chats: today },
+    { key: "last7", label: "近 7 天", chats: last7Days },
+    { key: "last30", label: "近 30 天", chats: last30Days },
+    { key: "older", label: "更早", chats: older },
+  ].filter((group) => group.chats.length > 0);
+};
+
 const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -42,7 +93,9 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
   const [editingChatId, setEditingChatId] = React.useState<number | null>(null);
   const [draftTitle, setDraftTitle] = React.useState("");
   const [actionError, setActionError] = React.useState("");
+  const [actionNotice, setActionNotice] = React.useState("");
   const [busyChatId, setBusyChatId] = React.useState<number | null>(null);
+  const importInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     if (!collapsed) return;
@@ -76,12 +129,18 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     });
   }, [chats, keyword]);
 
+  const groupedFilteredChats = React.useMemo(
+    () => groupChatsByRecency(filteredChats),
+    [filteredChats]
+  );
+
   const handleCreateNewChat = () => {
     router.push(`/chat/new?draftId=${Date.now().toString(36)}`);
   };
 
   const runAction = async (chatId: number, task: () => Promise<void>) => {
     setActionError("");
+    setActionNotice("");
     setBusyChatId(chatId);
     try {
       await task();
@@ -106,6 +165,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
 
   const handleStartEdit = (chat: ChatModel) => {
     setActionError("");
+    setActionNotice("");
     setEditingChatId(chat.id);
     setDraftTitle(chat.title);
   };
@@ -150,6 +210,53 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     });
   };
 
+  const handleExportChats = async () => {
+    setActionError("");
+    setActionNotice("");
+    try {
+      const payload = await exportLocalChats(chatScope);
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const date = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `deepscan-chats-${date}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setActionNotice(`已导出 ${payload.chats.length} 个会话`);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "导出失败");
+    }
+  };
+
+  const handleSelectImportFile = () => {
+    setActionError("");
+    setActionNotice("");
+    importInputRef.current?.click();
+  };
+
+  const handleImportFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const payload = JSON.parse(text) as unknown;
+      const result = await importLocalChats(chatScope, payload, "merge");
+      await queryClient.invalidateQueries({ queryKey: ["chats", chatScope] });
+      setActionNotice(
+        `导入完成：新增 ${result.importedCount} 个会话（当前共 ${result.totalCount}）`
+      );
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "导入失败，请检查文件");
+    } finally {
+      event.target.value = "";
+    }
+  };
+
   const renderTopActions = () => {
     if (collapsed) {
       return (
@@ -162,6 +269,26 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
             title="创建新对话"
           >
             <AddIcon fontSize="small" />
+          </button>
+          <button
+            type="button"
+            className="flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+            onClick={() => {
+              void handleExportChats();
+            }}
+            aria-label="导出会话"
+            title="导出会话"
+          >
+            <FileDownloadOutlinedIcon fontSize="small" />
+          </button>
+          <button
+            type="button"
+            className="flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+            onClick={handleSelectImportFile}
+            aria-label="导入会话"
+            title="导入会话"
+          >
+            <FileUploadOutlinedIcon fontSize="small" />
           </button>
           <button
             type="button"
@@ -207,6 +334,26 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
           )}
           {!isHydrated ? "切换主题" : theme === "dark" ? "切换到亮色" : "切换到暗色"}
         </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className="flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+            onClick={() => {
+              void handleExportChats();
+            }}
+          >
+            <FileDownloadOutlinedIcon fontSize="inherit" />
+            导出
+          </button>
+          <button
+            type="button"
+            className="flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+            onClick={handleSelectImportFile}
+          >
+            <FileUploadOutlinedIcon fontSize="inherit" />
+            导入
+          </button>
+        </div>
       </div>
     );
   };
@@ -327,10 +474,22 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
       ) : null}
 
       <div className={`mt-2 flex-1 overflow-y-auto pb-4 ${collapsed ? "space-y-2 px-2" : "space-y-1 px-3"}`}>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json"
+          className="hidden"
+          onChange={handleImportFileChange}
+        />
         {collapsed ? (
           renderCollapsedChats()
         ) : (
           <>
+            {actionNotice ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700 dark:border-emerald-700/70 dark:bg-emerald-900/30 dark:text-emerald-300">
+                {actionNotice}
+              </div>
+            ) : null}
             {actionError ? (
               <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-700/70 dark:bg-red-900/30 dark:text-red-300">
                 {actionError}
@@ -370,136 +529,143 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
               </div>
             ) : null}
             {!isError &&
-              filteredChats.map((chat: ChatModel) => {
-                const isActive = pathname === `/chat/${chat.id}`;
-                const isEditing = editingChatId === chat.id;
-                const isBusy = busyChatId === chat.id;
+              groupedFilteredChats.map((group) => (
+                <section key={group.key} className="space-y-1">
+                  <p className="px-2 pt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                    {group.label}
+                  </p>
+                  {group.chats.map((chat: ChatModel) => {
+                    const isActive = pathname === `/chat/${chat.id}`;
+                    const isEditing = editingChatId === chat.id;
+                    const isBusy = busyChatId === chat.id;
 
-                return (
-                  <div
-                    key={chat.id}
-                    className={`rounded-xl border px-2 py-2 transition ${
-                      isActive
-                        ? "border-blue-200 bg-blue-50/70 dark:border-blue-800 dark:bg-blue-900/20"
-                        : "border-transparent hover:border-slate-200 hover:bg-slate-100 dark:hover:border-slate-700 dark:hover:bg-slate-800"
-                    }`}
-                  >
-                    {isEditing ? (
-                      <div className="flex items-center gap-1">
-                        <input
-                          value={draftTitle}
-                          onChange={(e) => setDraftTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              void handleSaveTitle(chat.id);
-                            }
-                            if (e.key === "Escape") {
-                              handleCancelEdit();
-                            }
-                          }}
-                          className="h-8 flex-1 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-700 outline-none focus:border-slate-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-slate-400"
-                          autoFocus
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void handleSaveTitle(chat.id);
-                          }}
-                          disabled={isBusy}
-                          className="rounded-md p-1 text-slate-600 hover:bg-slate-200 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-700"
-                          aria-label="保存标题"
-                        >
-                          <CheckIcon fontSize="small" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCancelEdit}
-                          disabled={isBusy}
-                          className="rounded-md p-1 text-slate-600 hover:bg-slate-200 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-700"
-                          aria-label="取消编辑"
-                        >
-                          <CloseIcon fontSize="small" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-start gap-1">
-                        <button
-                          type="button"
-                          className={`flex min-w-0 flex-1 flex-col items-start rounded-lg px-1.5 py-1.5 text-left transition ${
-                            isActive
-                              ? "text-blue-700 dark:text-blue-300"
-                              : "text-slate-700 dark:text-slate-200"
-                          }`}
-                          onClick={() => {
-                            router.push(`/chat/${chat.id}`);
-                          }}
-                          disabled={isBusy}
-                        >
-                          <div className="flex w-full items-center gap-2">
-                            <ChatBubbleOutlineIcon
-                              fontSize="small"
-                              className={`shrink-0 ${
-                                isActive
-                                  ? "text-blue-600 dark:text-blue-300"
-                                  : "text-slate-400 dark:text-slate-500"
-                              }`}
+                    return (
+                      <div
+                        key={chat.id}
+                        className={`rounded-xl border px-2 py-2 transition ${
+                          isActive
+                            ? "border-blue-200 bg-blue-50/70 dark:border-blue-800 dark:bg-blue-900/20"
+                            : "border-transparent hover:border-slate-200 hover:bg-slate-100 dark:hover:border-slate-700 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        {isEditing ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              value={draftTitle}
+                              onChange={(e) => setDraftTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  void handleSaveTitle(chat.id);
+                                }
+                                if (e.key === "Escape") {
+                                  handleCancelEdit();
+                                }
+                              }}
+                              className="h-8 flex-1 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-700 outline-none focus:border-slate-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-slate-400"
+                              autoFocus
                             />
-                            <p className="line-clamp-1 text-sm font-medium">{chat.title}</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void handleSaveTitle(chat.id);
+                              }}
+                              disabled={isBusy}
+                              className="rounded-md p-1 text-slate-600 hover:bg-slate-200 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-700"
+                              aria-label="保存标题"
+                            >
+                              <CheckIcon fontSize="small" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleCancelEdit}
+                              disabled={isBusy}
+                              className="rounded-md p-1 text-slate-600 hover:bg-slate-200 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-700"
+                              aria-label="取消编辑"
+                            >
+                              <CloseIcon fontSize="small" />
+                            </button>
                           </div>
-                          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                            <span>{chat.model === "deepseek-r1" ? "R1" : "V3"}</span>
-                            {chat.pinned ? (
-                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                                置顶
-                              </span>
-                            ) : null}
+                        ) : (
+                          <div className="flex items-start gap-1">
+                            <button
+                              type="button"
+                              className={`flex min-w-0 flex-1 flex-col items-start rounded-lg px-1.5 py-1.5 text-left transition ${
+                                isActive
+                                  ? "text-blue-700 dark:text-blue-300"
+                                  : "text-slate-700 dark:text-slate-200"
+                              }`}
+                              onClick={() => {
+                                router.push(`/chat/${chat.id}`);
+                              }}
+                              disabled={isBusy}
+                            >
+                              <div className="flex w-full items-center gap-2">
+                                <ChatBubbleOutlineIcon
+                                  fontSize="small"
+                                  className={`shrink-0 ${
+                                    isActive
+                                      ? "text-blue-600 dark:text-blue-300"
+                                      : "text-slate-400 dark:text-slate-500"
+                                  }`}
+                                />
+                                <p className="line-clamp-1 text-sm font-medium">{chat.title}</p>
+                              </div>
+                              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                                <span>{chat.model === "deepseek-r1" ? "R1" : "V3"}</span>
+                                {chat.pinned ? (
+                                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                                    置顶
+                                  </span>
+                                ) : null}
+                              </div>
+                            </button>
+                            <div className="flex shrink-0 items-center gap-0.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void handleTogglePin(chat);
+                                }}
+                                disabled={isBusy}
+                                className="rounded-md p-1 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                                aria-label={chat.pinned ? "取消置顶" : "置顶会话"}
+                                title={chat.pinned ? "取消置顶" : "置顶"}
+                              >
+                                {chat.pinned ? (
+                                  <PushPinIcon fontSize="small" />
+                                ) : (
+                                  <PushPinOutlinedIcon fontSize="small" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleStartEdit(chat)}
+                                disabled={isBusy}
+                                className="rounded-md p-1 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                                aria-label="重命名会话"
+                                title="重命名"
+                              >
+                                <EditOutlinedIcon fontSize="small" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void handleDeleteChat(chat.id);
+                                }}
+                                disabled={isBusy}
+                                className="rounded-md p-1 text-slate-500 transition hover:bg-red-100 hover:text-red-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-red-900/40 dark:hover:text-red-300"
+                                aria-label="删除会话"
+                                title="删除"
+                              >
+                                <DeleteOutlineIcon fontSize="small" />
+                              </button>
+                            </div>
                           </div>
-                        </button>
-                        <div className="flex shrink-0 items-center gap-0.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void handleTogglePin(chat);
-                            }}
-                            disabled={isBusy}
-                            className="rounded-md p-1 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                            aria-label={chat.pinned ? "取消置顶" : "置顶会话"}
-                            title={chat.pinned ? "取消置顶" : "置顶"}
-                          >
-                            {chat.pinned ? (
-                              <PushPinIcon fontSize="small" />
-                            ) : (
-                              <PushPinOutlinedIcon fontSize="small" />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleStartEdit(chat)}
-                            disabled={isBusy}
-                            className="rounded-md p-1 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                            aria-label="重命名会话"
-                            title="重命名"
-                          >
-                            <EditOutlinedIcon fontSize="small" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void handleDeleteChat(chat.id);
-                            }}
-                            disabled={isBusy}
-                            className="rounded-md p-1 text-slate-500 transition hover:bg-red-100 hover:text-red-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-red-900/40 dark:hover:text-red-300"
-                            aria-label="删除会话"
-                            title="删除"
-                          >
-                            <DeleteOutlineIcon fontSize="small" />
-                          </button>
-                        </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </section>
+              ))}
           </>
         )}
       </div>

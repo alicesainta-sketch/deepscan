@@ -9,6 +9,14 @@ type ChatStoreState = {
   chatsByScope: Record<string, ChatModel[]>;
 };
 
+export type ChatExportPayload = {
+  kind: "deepscan-chat-export";
+  version: number;
+  scope: string;
+  exportedAt: number;
+  chats: ChatModel[];
+};
+
 const getDefaultState = (): ChatStoreState => ({
   version: CHAT_STORE_VERSION,
   nextChatId: 1,
@@ -159,4 +167,60 @@ export const deleteLocalChat = async (scope: string, chatId: number) => {
   store.chatsByScope[scope] = chats.filter((chat) => chat.id !== chatId);
   writeStore(store);
   return true;
+};
+
+export const exportLocalChats = async (scope: string): Promise<ChatExportPayload> => {
+  const chats = await listChats(scope);
+  return {
+    kind: "deepscan-chat-export",
+    version: CHAT_STORE_VERSION,
+    scope,
+    exportedAt: Date.now(),
+    chats,
+  };
+};
+
+export const importLocalChats = async (
+  scope: string,
+  payload: unknown,
+  mode: "merge" | "replace" = "merge"
+) => {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("导入文件格式无效");
+  }
+
+  const candidate = payload as {
+    kind?: unknown;
+    chats?: unknown;
+  };
+
+  if (candidate.kind !== "deepscan-chat-export") {
+    throw new Error("不支持的导入文件类型");
+  }
+  if (!Array.isArray(candidate.chats)) {
+    throw new Error("导入文件缺少 chats 数组");
+  }
+
+  const store = readStore();
+  const importedChats = candidate.chats.map((rawChat, index) =>
+    normalizeChat(rawChat as Partial<ChatModel>, index + 1)
+  );
+
+  const withFreshIds = importedChats.map((chat) => ({
+    ...chat,
+    id: store.nextChatId++,
+    userId: scope,
+  }));
+
+  const currentChats = store.chatsByScope[scope] ?? [];
+  const nextChats =
+    mode === "replace" ? withFreshIds : [...withFreshIds, ...currentChats];
+
+  store.chatsByScope[scope] = sortChats(nextChats);
+  writeStore(store);
+
+  return {
+    importedCount: withFreshIds.length,
+    totalCount: store.chatsByScope[scope].length,
+  };
 };

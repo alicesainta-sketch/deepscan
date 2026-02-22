@@ -10,7 +10,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
 import ChatHeader from "@/app/components/ChatHeader";
 import ErrorDisplay from "@/app/components/ErrorDisplay";
@@ -18,6 +17,7 @@ import InputField from "@/app/components/InputField";
 import LoadingIndicator from "@/app/components/LoadingIndicator";
 import MessageList from "@/app/components/MessageList";
 import { createLocalChat, getChatScope } from "@/lib/chatStore";
+import { useHydrated } from "@/lib/useHydrated";
 
 const getChatStorageKey = (sessionId: string) =>
   `deepscan:chat:${sessionId}:messages`;
@@ -50,10 +50,6 @@ const hasAssistantResponse = (messages: UIMessage[]) =>
 
 const MAX_DRAFT_PERSIST_RETRIES = 3;
 const DRAFT_PERSIST_RETRY_DELAY_MS = 1500;
-const subscribeHydration = () => () => {};
-
-const useIsHydrated = () =>
-  useSyncExternalStore(subscribeHydration, () => true, () => false);
 
 function ChatSession({
   routeChatId,
@@ -260,12 +256,11 @@ function HydratedChatSession({
   initialPrompt?: string;
   initialModel: "deepseek-v3" | "deepseek-r1";
 }) {
-  const isHydrated = useIsHydrated();
+  const isHydrated = useHydrated();
   const { userId } = useAuth();
   const chatScope = getChatScope(userId);
   const isDraftSession = routeChatId === "new";
   const sessionId = isDraftSession ? `draft:${draftId ?? "default"}` : routeChatId;
-
   const initialMessages = useMemo(() => {
     if (!isHydrated) return [];
     return parseStoredMessages(localStorage.getItem(getChatStorageKey(sessionId)));

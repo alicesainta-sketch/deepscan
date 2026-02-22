@@ -65,77 +65,97 @@ function CodeBlock({
 export default function MessageList({ messages }: MessageListProps) {
   return (
     <div className="flex flex-col gap-6">
-      {messages.map((message) => {
-        const isAssistant = message.role === "assistant";
-        const content = getMessageContent(message);
+      {messages.map((message) => (
+        <MessageItem key={message.id} message={message} />
+      ))}
+    </div>
+  );
+}
 
-        return (
-          <div
-            key={message.id}
-            className={`flex ${
-              isAssistant ? "justify-start md:pr-12" : "justify-end md:pl-12"
-            }`}
-          >
-            <div
-              className={`max-w-[92%] rounded-lg px-4 py-2 md:max-w-[85%] ${
-                isAssistant
-                  ? "bg-blue-100 text-gray-900 dark:bg-blue-900/30 dark:text-slate-100"
-                  : "bg-slate-200 text-gray-900 dark:bg-slate-700 dark:text-slate-100"
-              }`}
+function MessageItem({ message }: { message: UIMessage }) {
+  const isAssistant = message.role === "assistant";
+  const content = getMessageContent(message);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    if (!content.trim()) return;
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [content]);
+
+  return (
+    <div
+      className={`group flex ${
+        isAssistant ? "justify-start md:pr-12" : "justify-end md:pl-12"
+      }`}
+    >
+      <div
+        className={`max-w-[92%] rounded-lg px-4 py-2 md:max-w-[85%] ${
+          isAssistant
+            ? "bg-blue-100 text-gray-900 dark:bg-blue-900/30 dark:text-slate-100"
+            : "bg-slate-200 text-gray-900 dark:bg-slate-700 dark:text-slate-100"
+        }`}
+      >
+        <div className="prose prose-sm max-w-none break-words dark:prose-invert">
+          {isAssistant ? (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                code({
+                  inline,
+                  className,
+                  children,
+                  ...props
+                }: {
+                  inline?: boolean;
+                  className?: string;
+                  children?: React.ReactNode;
+                }) {
+                  const isInline = Boolean(inline);
+                  if (isInline) {
+                    return (
+                      <code
+                        className="rounded bg-gray-200 px-1 py-0.5 font-mono text-sm dark:bg-slate-700"
+                        {...props}
+                      >
+                        {children}
+                      </code>
+                    );
+                  }
+                  return (
+                    <CodeBlock className={className}>
+                      {String(children).replace(/\n$/, "")}
+                    </CodeBlock>
+                  );
+                },
+                p: ({ children }: { children?: React.ReactNode }) => (
+                  <p className="mb-2 last:mb-0">{children}</p>
+                ),
+                ul: ({ children }: { children?: React.ReactNode }) => (
+                  <ul className="my-2 list-disc pl-5">{children}</ul>
+                ),
+                ol: ({ children }: { children?: React.ReactNode }) => (
+                  <ol className="my-2 list-decimal pl-5">{children}</ol>
+                ),
+              }}
             >
-              <div className="prose prose-sm max-w-none break-words dark:prose-invert">
-                {isAssistant ? (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      code({
-                        inline,
-                        className,
-                        children,
-                        ...props
-                      }: {
-                        inline?: boolean;
-                        className?: string;
-                        children?: React.ReactNode;
-                      }) {
-                        const isInline = Boolean(inline);
-                        if (isInline) {
-                          return (
-                            <code
-                              className="rounded bg-gray-200 px-1 py-0.5 font-mono text-sm dark:bg-slate-700"
-                              {...props}
-                            >
-                              {children}
-                            </code>
-                          );
-                        }
-                        return (
-                          <CodeBlock className={className}>
-                            {String(children).replace(/\n$/, "")}
-                          </CodeBlock>
-                        );
-                      },
-                      p: ({ children }: { children?: React.ReactNode }) => (
-                        <p className="mb-2 last:mb-0">{children}</p>
-                      ),
-                      ul: ({ children }: { children?: React.ReactNode }) => (
-                        <ul className="my-2 list-disc pl-5">{children}</ul>
-                      ),
-                      ol: ({ children }: { children?: React.ReactNode }) => (
-                        <ol className="my-2 list-decimal pl-5">{children}</ol>
-                      ),
-                    }}
-                  >
-                    {content}
-                  </ReactMarkdown>
-                ) : (
-                  <div className="whitespace-pre-wrap text-sm">{content}</div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })}
+              {content}
+            </ReactMarkdown>
+          ) : (
+            <div className="whitespace-pre-wrap text-sm">{content}</div>
+          )}
+        </div>
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus:opacity-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            {copied ? "已复制" : "复制文本"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
