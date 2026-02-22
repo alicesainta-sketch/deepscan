@@ -1,92 +1,127 @@
 # DeepScan
 
-一个使用 Next.js + Vercel AI SDK 构建的简洁聊天应用，支持 DeepSeek 模型、消息流式传输、Markdown/代码高亮、亮暗主题切换与会话切换。当前版本为无数据库模式：会话列表保存在服务进程内存，消息历史保存在浏览器 `localStorage`。
+一个 AI 对话框项目（当前为 Next.js 实现），目标演进为**常见的纯前端 AI Chat 应用形态**：本地会话管理、模型切换、主题切换、代码渲染与可扩展插件能力。
 
-## 功能
+## 当前状态（as-is）
 
-- 聊天与流式输出：后端使用 AI SDK `streamText` 输出 UI 消息流，前端使用 `useChat` 接收（src/app/api/chat/route.ts）
-- 模型切换：支持在 deepseek-v3 与 deepseek-r1 间一键切换（src/app/page.tsx）
-- 亮暗主题：支持手动切换并持久化到浏览器；首屏脚本会提前应用主题，降低闪烁（src/components/ThemeProvider.tsx、src/components/ThemeScript.tsx、src/components/Navbar.tsx）
-- Markdown 与代码高亮、复制按钮（src/app/components/MessageList.tsx）
-- 聊天历史：
-  - 会话列表：首轮对话完成后再写入历史列表，避免空会话（src/app/api/create-chat/route.ts、src/app/api/get-chats/route.ts、src/components/Navbar.tsx）
-  - 消息记录：按会话 ID 持久化到浏览器 `localStorage`，切换会话可恢复（src/app/chat/[chat_id]/page.tsx）
-- 侧栏状态反馈：历史会话支持加载中、错误提示和重试（src/components/Navbar.tsx）
-- 聊天页稳定性：通过 hydration gating 避免 SSR 与客户端本地消息不一致导致的水合错误（src/app/chat/[chat_id]/page.tsx）
-- 移动端适配：聊天页容器与消息气泡做了移动端宽度优化（src/app/chat/[chat_id]/page.tsx、src/app/components/MessageList.tsx）
-- 认证中间件：可选启用 Clerk 保护，未配置发布密钥时自动回退以保证构建通过（src/app/layout.tsx、src/proxy.ts）
+- 已有对话体验：发送消息、流式输出、消息渲染、代码高亮复制。
+- 已有会话管理：侧边栏会话列表、搜索、置顶、重命名、删除。
+- 已有体验增强：亮暗主题、移动端适配、侧边栏折叠。
+- 当前仍包含 Next API 路由与服务端内存会话实现（并非完全纯前端架构）。
 
-## 技术栈
+## 目标状态（to-be：纯前端）
 
-- Next.js 16（App Router，Turbopack）
-- Vercel AI SDK：`@ai-sdk/react`、`@ai-sdk/openai-compatible`、`@ai-sdk/ui-utils`
-- 存储：
-  - 服务端：进程内存（无数据库依赖）
-  - 客户端：`localStorage`（按 `chat_id` 存消息）
-- 样式：Tailwind CSS v4，部分组件使用 MUI/Emotion
-- 状态：@tanstack/react-query
+将项目收敛为纯前端形态（不依赖项目自建后端）：
 
-## 目录结构
+- 会话、设置、偏好全部在浏览器本地存储（`localStorage` / `IndexedDB`）。
+- 模型调用通过前端 Provider 适配层（可选“用户自带 Key”模式）。
+- 页面层与状态层解耦，支持未来接入多模型、多插件、多工作区。
+- 保持“开箱即用 + 可二次开发”的工程结构。
 
-```
-src/
-  app/
-    api/
-      chat/route.ts           # 聊天流式接口（DeepSeek）
-      create-chat/route.ts    # 新建聊天
-      get-chats/route.ts      # 获取聊天列表
-    chat/[chat_id]/page.tsx   # 聊天页面
-    components/               # UI 组件（消息渲染、输入、头部等）
-    layout.tsx                # 根布局（含 Clerk 回退）
-    page.tsx                  # 首页（新建对话）
-  components/
-    Navbar.tsx                # 侧栏（聊天列表 + 主题切换）
-    QueryClientProvider.tsx   # React Query Provider
-    ThemeProvider.tsx         # 主题状态管理
-    ThemeScript.tsx           # 首屏主题预应用脚本
-  types/
-    chat.ts                   # Chat 类型
-index.ts                      # 内存数据操作（创建/查询会话）
-proxy.ts                      # Clerk 中间件配置
-```
+## 纯前端项目边界
 
-## 环境变量
+- 本项目默认不提供后端持久化和账号云同步。
+- 若使用第三方模型 API，建议采用“用户粘贴 Key，仅本地保存”策略。
+- 生产场景如需安全代理、审计、限流，建议单独部署网关服务（不在本阶段范围）。
 
-- 必需
-  - `DEEPSEEK_API_KEY`：DeepSeek 的 API Key（OpenAI 兼容）
-  - `BASE_URL`：DeepSeek/OpenAI 兼容的 Base URL
-- 可选（启用登录与保护）
-  - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`：Clerk Publishable Key
-  - `CLERK_SECRET_KEY`：Clerk Secret Key
+## 新开发计划（按常见 AI 对话框项目）
 
-未设置 Clerk 变量时，前端会自动回退，避免构建失败；如需保护路由与登录，请配置上述两个变量并在 `proxy.ts` 中开启中间件。
+### Phase 1：前端架构收敛（MVP 基座）
+
+目标：形成纯前端可运行闭环。
+
+- 移除或降级 `app/api/*` 依赖，建立 `ChatProviderAdapter` 前端适配层。
+- 统一状态分层：
+  - UI 状态（面板、主题、折叠态）
+  - 会话状态（chat list / active chat）
+  - 消息状态（streaming / error / retry）
+- 统一本地存储协议（版本号 + 数据迁移函数）。
+
+完成标准：
+
+- 不依赖服务端会话 API 也可完整聊天与管理会话。
+- 刷新页面后会话与设置可恢复。
+
+### Phase 2：核心对话体验对齐主流产品
+
+目标：把聊天体验做扎实。
+
+- 交互增强：停止生成、重新生成、复制消息、编辑后重发。
+- 消息能力：Markdown、代码块、表格、长文本折叠、错误分级展示。
+- 输入能力：快捷键、模板提示词、历史输入回溯。
+
+完成标准：
+
+- 覆盖常见聊天工作流：提问、追问、重试、修订、复制。
+
+### Phase 3：会话系统进阶
+
+目标：会话系统具备中大型项目可用性。
+
+- 会话分组（Today / 7 Days / 30 Days）。
+- 会话批量操作（批量删除、批量置顶、批量导出）。
+- 全局搜索（标题 + 消息内容关键字）。
+
+完成标准：
+
+- 100+ 会话场景下仍可快速定位与操作。
+
+### Phase 4：模型与配置中心
+
+目标：支持多模型与可配置运行时。
+
+- 模型配置中心：Provider、Model、温度、最大 tokens。
+- 多 Provider 适配：DeepSeek / OpenAI-compatible（统一接口）。
+- 请求生命周期可观测：首 token 时间、总耗时、失败原因。
+
+完成标准：
+
+- 同一套 UI 无缝切换多个模型配置。
+
+### Phase 5：工程质量与发布
+
+目标：可持续迭代。
+
+- 测试：关键状态流单测 + 关键交互 E2E。
+- 性能：首屏、长会话渲染、消息列表虚拟化（必要时）。
+- 文档：二开指南、配置说明、故障排查。
+
+完成标准：
+
+- 具备稳定发布节奏与回归保障。
+
+## 近期执行清单（建议 2 周）
+
+### Week 1
+
+- 抽离前端 `ChatProviderAdapter`。
+- 本地会话数据结构版本化（含 migration）。
+- 让聊天页不再依赖 `app/api/get-chats` / `app/api/create-chat`。
+
+### Week 2
+
+- 上线“重试/重新生成/编辑后重发”三项核心交互。
+- 增加会话分组与消息内搜索。
+- 补齐 README 的配置与排障章节。
+
+## 技术栈（建议保留）
+
+- Next.js 16（前端壳层）
+- React + TypeScript
+- Tailwind CSS
+- React Query（异步状态）
+- Vercel AI SDK（可继续沿用 UI/流式能力）
 
 ## 本地运行
 
 ```bash
 pnpm install
 pnpm dev
-# 生产构建
-pnpm run build
+pnpm build
 pnpm start
 ```
 
-默认地址：localhost:3000
-
-## 使用说明
-
-- 首页输入问题后点击“发送并进入”，会先进入草稿会话并发送首条消息；收到首轮回复后自动生成历史会话（src/app/page.tsx、src/app/chat/[chat_id]/page.tsx）
-- 聊天页输入消息并发送，支持 Shift+Enter 换行；侧栏可切换历史会话（src/app/chat/[chat_id]/page.tsx）
-- 代码块支持高亮与一键复制（src/app/components/MessageList.tsx）
-
-## 注意事项
-
-- 数据持久化边界：
-  - 会话列表在服务进程内存，重启 `pnpm dev` 后会清空
-  - 消息历史在浏览器 `localStorage`，清理浏览器数据后会丢失
-- 样式体系：Tailwind 与 MUI/Emotion并存，按需使用避免体积膨胀
-- 环境校验：建议在部署平台配置必需环境变量，避免 runtime 报错
-- 本地内存存储限制：会话列表在服务进程内存，若部署为多实例/无状态环境，需要改造为外部持久化存储
+默认地址：`http://localhost:3000`
 
 ## 许可证
 
