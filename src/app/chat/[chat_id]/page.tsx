@@ -83,24 +83,39 @@ function ChatSession({
   const [model, setModel] = useState<"deepseek-v3" | "deepseek-r1">(initialModel);
   const [persistError, setPersistError] = useState("");
   const [persistRetryTick, setPersistRetryTick] = useState(0);
+  const [editTarget, setEditTarget] = useState<{
+    id: string;
+    previousInput: string;
+  } | null>(null);
   const hasAutoSentInitialRef = useRef(false);
   const draftPersistStateRef = useRef<"idle" | "pending" | "done">("idle");
   const persistRetryCountRef = useRef(0);
   const persistRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { messages, sendMessage, error, status, stop, clearError } = useChat({
-    id: sessionId,
-    messages: initialMessages,
-    onError: (err) => console.error("Chat error:", err),
-  });
+  const { messages, sendMessage, regenerate, error, status, stop, clearError } =
+    useChat({
+      id: sessionId,
+      messages: initialMessages,
+      onError: (err) => console.error("Chat error:", err),
+    });
 
   const isLoading = status === "streaming" || status === "submitted";
   const endRef = useRef<HTMLDivElement>(null);
   const messageCount = messages?.length ?? 0;
+  const isEditing = Boolean(editTarget);
   const lastUserMessageText = useMemo(
     () => getLastUserMessageText(messages ?? []),
     [messages]
   );
+  const lastAssistantMessageId = useMemo(() => {
+    if (!messages?.length) return null;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i].role === "assistant") {
+        return messages[i].id;
+      }
+    }
+    return null;
+  }, [messages]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -131,6 +146,14 @@ function ChatSession({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!editTarget) return;
+    const exists = messages?.some((message) => message.id === editTarget.id);
+    if (!exists) {
+      setEditTarget(null);
+    }
+  }, [editTarget, messages]);
 
   useEffect(() => {
     if (!isDraftSession) return;
@@ -214,7 +237,12 @@ function ChatSession({
     if (!input.trim()) return;
     setPersistError("");
     persistRetryCountRef.current = 0;
-    sendMessage({ text: input }, { body: { model } });
+    if (editTarget) {
+      sendMessage({ text: input, messageId: editTarget.id }, { body: { model } });
+      setEditTarget(null);
+    } else {
+      sendMessage({ text: input }, { body: { model } });
+    }
     setInput("");
   };
 
@@ -222,7 +250,30 @@ function ChatSession({
     if (isLoading || !lastUserMessageText) return;
     setPersistError("");
     persistRetryCountRef.current = 0;
+    setEditTarget(null);
     sendMessage({ text: lastUserMessageText }, { body: { model } });
+  };
+
+  const handleRegenerateLast = () => {
+    if (isLoading || !lastAssistantMessageId || isEditing) return;
+    setPersistError("");
+    persistRetryCountRef.current = 0;
+    regenerate({ messageId: lastAssistantMessageId, body: { model } });
+  };
+
+  const handleStartEditMessage = (message: UIMessage) => {
+    if (isLoading) return;
+    const nextText = getMessageText(message);
+    if (!nextText.trim()) return;
+    setPersistError("");
+    setEditTarget({ id: message.id, previousInput: input });
+    setInput(nextText);
+  };
+
+  const handleCancelEdit = () => {
+    if (!editTarget) return;
+    setInput(editTarget.previousInput);
+    setEditTarget(null);
   };
 
   return (
@@ -242,7 +293,11 @@ function ChatSession({
               <p className="text-xs">发送一条消息与 AI 助手聊天</p>
             </div>
           ) : (
-            <MessageList messages={messages ?? []} />
+            <MessageList
+              messages={messages ?? []}
+              onEditMessage={handleStartEditMessage}
+              editingMessageId={editTarget?.id ?? null}
+            />
           )}
           {isLoading && (
             <div className="flex justify-start">
@@ -252,7 +307,27 @@ function ChatSession({
           <div ref={endRef} className="h-4" />
         </div>
         <div className="w-full max-w-4xl shrink-0 px-4 pb-4 md:px-6">
-          <div className="mb-2 flex items-center justify-end">
+          {isEditing ? (
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-700/70 dark:bg-blue-900/30 dark:text-blue-200">
+              <span>正在编辑消息，提交后会重新生成后续回答。</span>
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="rounded-md border border-blue-300 px-2 py-1 text-xs text-blue-700 transition hover:bg-blue-100 dark:border-blue-600 dark:text-blue-200 dark:hover:bg-blue-900/60"
+              >
+                取消编辑
+              </button>
+            </div>
+          ) : null}
+          <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleRegenerateLast}
+              disabled={isLoading || isEditing || !lastAssistantMessageId}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              重新生成
+            </button>
             <button
               type="button"
               onClick={handleRetryLastPrompt}
@@ -268,6 +343,7 @@ function ChatSession({
             onSubmit={handleSubmit}
             isLoading={isLoading}
             onStop={stop}
+            placeholder={isEditing ? "编辑后按 Enter 重新发送…" : "输入消息…"}
           />
         </div>
       </div>

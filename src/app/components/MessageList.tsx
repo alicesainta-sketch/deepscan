@@ -9,6 +9,8 @@ import type { UIMessage } from "ai";
 
 interface MessageListProps {
   messages: UIMessage[];
+  onEditMessage?: (message: UIMessage) => void;
+  editingMessageId?: string | null;
 }
 
 function getMessageContent(message: UIMessage): string {
@@ -62,17 +64,34 @@ function CodeBlock({
   );
 }
 
-export default function MessageList({ messages }: MessageListProps) {
+export default function MessageList({
+  messages,
+  onEditMessage,
+  editingMessageId,
+}: MessageListProps) {
   return (
     <div className="flex flex-col gap-6">
       {messages.map((message) => (
-        <MessageItem key={message.id} message={message} />
+        <MessageItem
+          key={message.id}
+          message={message}
+          onEditMessage={onEditMessage}
+          isEditing={editingMessageId === message.id}
+        />
       ))}
     </div>
   );
 }
 
-function MessageItem({ message }: { message: UIMessage }) {
+function MessageItem({
+  message,
+  onEditMessage,
+  isEditing,
+}: {
+  message: UIMessage;
+  onEditMessage?: (message: UIMessage) => void;
+  isEditing: boolean;
+}) {
   const isAssistant = message.role === "assistant";
   const content = getMessageContent(message);
   const [copied, setCopied] = useState(false);
@@ -95,6 +114,10 @@ function MessageItem({ message }: { message: UIMessage }) {
           isAssistant
             ? "bg-blue-100 text-gray-900 dark:bg-blue-900/30 dark:text-slate-100"
             : "bg-slate-200 text-gray-900 dark:bg-slate-700 dark:text-slate-100"
+        } ${
+          isEditing
+            ? "ring-2 ring-blue-300 ring-offset-2 ring-offset-white dark:ring-blue-700 dark:ring-offset-slate-900"
+            : ""
         }`}
       >
         <div className="prose prose-sm max-w-none break-words dark:prose-invert">
@@ -146,7 +169,16 @@ function MessageItem({ message }: { message: UIMessage }) {
             <div className="whitespace-pre-wrap text-sm">{content}</div>
           )}
         </div>
-        <div className="mt-2 flex justify-end">
+        <div className="mt-2 flex justify-end gap-2">
+          {!isAssistant && onEditMessage ? (
+            <button
+              type="button"
+              onClick={() => onEditMessage(message)}
+              className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus:opacity-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              编辑
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={handleCopy}
