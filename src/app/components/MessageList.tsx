@@ -11,6 +11,8 @@ interface MessageListProps {
   messages: UIMessage[];
   onEditMessage?: (message: UIMessage) => void;
   editingMessageId?: string | null;
+  highlightedMessageIds?: Set<string>;
+  activeMessageId?: string | null;
 }
 
 function getMessageContent(message: UIMessage): string {
@@ -68,6 +70,8 @@ export default function MessageList({
   messages,
   onEditMessage,
   editingMessageId,
+  highlightedMessageIds,
+  activeMessageId,
 }: MessageListProps) {
   return (
     <div className="flex flex-col gap-6">
@@ -77,6 +81,8 @@ export default function MessageList({
           message={message}
           onEditMessage={onEditMessage}
           isEditing={editingMessageId === message.id}
+          isMatch={highlightedMessageIds?.has(message.id) ?? false}
+          isActiveMatch={activeMessageId === message.id}
         />
       ))}
     </div>
@@ -87,10 +93,14 @@ function MessageItem({
   message,
   onEditMessage,
   isEditing,
+  isMatch,
+  isActiveMatch,
 }: {
   message: UIMessage;
   onEditMessage?: (message: UIMessage) => void;
   isEditing: boolean;
+  isMatch: boolean;
+  isActiveMatch: boolean;
 }) {
   const isAssistant = message.role === "assistant";
   const content = getMessageContent(message);
@@ -105,7 +115,8 @@ function MessageItem({
 
   return (
     <div
-      className={`group flex ${
+      data-message-id={message.id}
+      className={`group flex scroll-mt-24 ${
         isAssistant ? "justify-start md:pr-12" : "justify-end md:pl-12"
       }`}
     >
@@ -117,6 +128,10 @@ function MessageItem({
         } ${
           isEditing
             ? "ring-2 ring-blue-300 ring-offset-2 ring-offset-white dark:ring-blue-700 dark:ring-offset-slate-900"
+            : isActiveMatch
+              ? "ring-2 ring-amber-400 ring-offset-2 ring-offset-white dark:ring-amber-500 dark:ring-offset-slate-900"
+              : isMatch
+                ? "ring-1 ring-amber-300 ring-offset-2 ring-offset-white dark:ring-amber-700 dark:ring-offset-slate-900"
             : ""
         }`}
       >
