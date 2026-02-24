@@ -5,11 +5,12 @@ import { auth } from "@clerk/nextjs/server";
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
 
-const deepseekClient = createOpenAICompatible({
-  apiKey: process.env.DEEPSEEK_API_KEY,
-  baseURL: process.env.BASE_URL!,
-  name: "deepseek",
-});
+const getDeepseekClient = (apiKey: string, baseURL: string) =>
+  createOpenAICompatible({
+    apiKey,
+    baseURL,
+    name: "deepseek",
+  });
 
 export async function POST(req: Request) {
   const { userId } = await auth();
@@ -17,7 +18,9 @@ export async function POST(req: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!process.env.DEEPSEEK_API_KEY || !process.env.BASE_URL) {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const baseURL = process.env.BASE_URL;
+  if (!apiKey || !baseURL) {
     return Response.json(
       { error: "Missing DEEPSEEK_API_KEY or BASE_URL" },
       { status: 500 }
@@ -42,6 +45,7 @@ export async function POST(req: Request) {
       : "deepseek-v3";
 
   try {
+    const deepseekClient = getDeepseekClient(apiKey, baseURL);
     const result = await streamText({
       model: deepseekClient(model),
       system: "You are a helpful assistant.",
