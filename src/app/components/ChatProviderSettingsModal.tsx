@@ -1,32 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ChatProviderConfig } from "@/lib/chatProviderAdapter";
 import { DEFAULT_CHAT_PROVIDER_CONFIG } from "@/lib/chatProviderAdapter";
 
 type ChatProviderSettingsModalProps = {
-  open: boolean;
   config: ChatProviderConfig;
   onClose: () => void;
   onSave: (config: ChatProviderConfig) => void;
 };
 
 export default function ChatProviderSettingsModal({
-  open,
   config,
   onClose,
   onSave,
 }: ChatProviderSettingsModalProps) {
-  const [draft, setDraft] = useState<ChatProviderConfig>(config);
+  const [draft, setDraft] = useState<ChatProviderConfig>(() => config);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!open) return;
-    setDraft(config);
-    setError("");
-  }, [open, config]);
-
-  if (!open) return null;
 
   const handleSave = () => {
     const apiUrl = draft.apiUrl.trim();

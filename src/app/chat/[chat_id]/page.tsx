@@ -382,12 +382,13 @@ function ChatSession({
           />
         </div>
       </div>
-      <ChatProviderSettingsModal
-        open={isProviderSettingsOpen}
-        config={providerConfig}
-        onClose={() => setIsProviderSettingsOpen(false)}
-        onSave={handleSaveProviderConfig}
-      />
+      {isProviderSettingsOpen ? (
+        <ChatProviderSettingsModal
+          config={providerConfig}
+          onClose={() => setIsProviderSettingsOpen(false)}
+          onSave={handleSaveProviderConfig}
+        />
+      ) : null}
     </div>
   );
 }

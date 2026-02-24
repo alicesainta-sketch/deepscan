@@ -30,20 +30,12 @@ export const useMessageSearch = (messages: UIMessage[]): MessageSearchState => {
   }, [messages, normalizedQuery]);
 
   const matchIdSet = useMemo(() => new Set(matchIds), [matchIds]);
+  const clampedActiveIndex =
+    matchIds.length === 0
+      ? 0
+      : Math.min(activeMatchIndex, matchIds.length - 1);
   const activeMatchId =
-    matchIds.length > 0 ? matchIds[activeMatchIndex] : null;
-
-  useEffect(() => {
-    setActiveMatchIndex(0);
-  }, [normalizedQuery]);
-
-  useEffect(() => {
-    if (matchIds.length === 0) {
-      setActiveMatchIndex(0);
-      return;
-    }
-    setActiveMatchIndex((prev) => Math.min(prev, matchIds.length - 1));
-  }, [matchIds.length]);
+    matchIds.length > 0 ? matchIds[clampedActiveIndex] : null;
 
   useEffect(() => {
     if (!activeMatchId || typeof document === "undefined") return;
@@ -56,29 +48,41 @@ export const useMessageSearch = (messages: UIMessage[]): MessageSearchState => {
 
   const goPrev = () => {
     if (matchIds.length === 0) return;
-    setActiveMatchIndex((prev) =>
-      prev === 0 ? matchIds.length - 1 : prev - 1
-    );
+    setActiveMatchIndex((prev) => {
+      const current =
+        matchIds.length === 0
+          ? 0
+          : Math.min(prev, matchIds.length - 1);
+      return current === 0 ? matchIds.length - 1 : current - 1;
+    });
   };
 
   const goNext = () => {
     if (matchIds.length === 0) return;
-    setActiveMatchIndex((prev) =>
-      prev === matchIds.length - 1 ? 0 : prev + 1
-    );
+    setActiveMatchIndex((prev) => {
+      const current =
+        matchIds.length === 0
+          ? 0
+          : Math.min(prev, matchIds.length - 1);
+      return current === matchIds.length - 1 ? 0 : current + 1;
+    });
   };
 
   const clear = () => {
     setQuery("");
+    setActiveMatchIndex(0);
   };
 
   return {
     query,
-    setQuery,
+    setQuery: (value: string) => {
+      setQuery(value);
+      setActiveMatchIndex(0);
+    },
     matchIds,
     matchIdSet,
     activeMatchId,
-    activeMatchIndex,
+    activeMatchIndex: clampedActiveIndex,
     goPrev,
     goNext,
     clear,
