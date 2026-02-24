@@ -105,6 +105,9 @@ function MessageItem({
   const isAssistant = message.role === "assistant";
   const content = getMessageContent(message);
   const [copied, setCopied] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const isLongMessage =
+    content.length > 1200 || content.split(/\n/).length > 14;
 
   const handleCopy = useCallback(() => {
     if (!content.trim()) return;
@@ -135,56 +138,80 @@ function MessageItem({
             : ""
         }`}
       >
-        <div className="prose prose-sm max-w-none break-words dark:prose-invert">
-          {isAssistant ? (
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                code({
-                  inline,
-                  className,
-                  children,
-                  ...props
-                }: {
-                  inline?: boolean;
-                  className?: string;
-                  children?: React.ReactNode;
-                }) {
-                  const isInline = Boolean(inline);
-                  if (isInline) {
+        <div
+          className={`relative ${
+            isLongMessage && !isExpanded ? "max-h-40 overflow-hidden" : ""
+          }`}
+        >
+          <div className="prose prose-sm max-w-none break-words dark:prose-invert">
+            {isAssistant ? (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  code({
+                    inline,
+                    className,
+                    children,
+                    ...props
+                  }: {
+                    inline?: boolean;
+                    className?: string;
+                    children?: React.ReactNode;
+                  }) {
+                    const isInline = Boolean(inline);
+                    if (isInline) {
+                      return (
+                        <code
+                          className="rounded bg-gray-200 px-1 py-0.5 font-mono text-sm dark:bg-slate-700"
+                          {...props}
+                        >
+                          {children}
+                        </code>
+                      );
+                    }
                     return (
-                      <code
-                        className="rounded bg-gray-200 px-1 py-0.5 font-mono text-sm dark:bg-slate-700"
-                        {...props}
-                      >
-                        {children}
-                      </code>
+                      <CodeBlock className={className}>
+                        {String(children).replace(/\n$/, "")}
+                      </CodeBlock>
                     );
-                  }
-                  return (
-                    <CodeBlock className={className}>
-                      {String(children).replace(/\n$/, "")}
-                    </CodeBlock>
-                  );
-                },
-                p: ({ children }: { children?: React.ReactNode }) => (
-                  <p className="mb-2 last:mb-0">{children}</p>
-                ),
-                ul: ({ children }: { children?: React.ReactNode }) => (
-                  <ul className="my-2 list-disc pl-5">{children}</ul>
-                ),
-                ol: ({ children }: { children?: React.ReactNode }) => (
-                  <ol className="my-2 list-decimal pl-5">{children}</ol>
-                ),
-              }}
-            >
-              {content}
-            </ReactMarkdown>
-          ) : (
-            <div className="whitespace-pre-wrap text-sm">{content}</div>
-          )}
+                  },
+                  p: ({ children }: { children?: React.ReactNode }) => (
+                    <p className="mb-2 last:mb-0">{children}</p>
+                  ),
+                  ul: ({ children }: { children?: React.ReactNode }) => (
+                    <ul className="my-2 list-disc pl-5">{children}</ul>
+                  ),
+                  ol: ({ children }: { children?: React.ReactNode }) => (
+                    <ol className="my-2 list-decimal pl-5">{children}</ol>
+                  ),
+                }}
+              >
+                {content}
+              </ReactMarkdown>
+            ) : (
+              <div className="whitespace-pre-wrap text-sm">{content}</div>
+            )}
+          </div>
+          {isLongMessage && !isExpanded ? (
+            <div
+              className={`pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t ${
+                isAssistant
+                  ? "from-blue-100 dark:from-blue-900/30"
+                  : "from-slate-200 dark:from-slate-700"
+              } to-transparent`}
+            />
+          ) : null}
         </div>
         <div className="mt-2 flex justify-end gap-2">
+          {isLongMessage ? (
+            <button
+              type="button"
+              onClick={() => setIsExpanded((prev) => !prev)}
+              className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus:opacity-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              {isExpanded ? "收起" : "展开"}
+            </button>
+          ) : null}
           {!isAssistant && onEditMessage ? (
             <button
               type="button"
