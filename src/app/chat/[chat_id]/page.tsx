@@ -12,13 +12,21 @@ import {
   useState,
 } from "react";
 import ChatHeader from "@/app/components/ChatHeader";
+import ChatMessageSearchBar from "@/app/components/ChatMessageSearchBar";
 import ErrorDisplay from "@/app/components/ErrorDisplay";
 import InputField from "@/app/components/InputField";
 import LoadingIndicator from "@/app/components/LoadingIndicator";
 import MessageList from "@/app/components/MessageList";
+import { createChatTransport } from "@/lib/chatProviderAdapter";
+import {
+  getFirstUserMessageText,
+  getLastUserMessageText,
+  getMessageText,
+  hasAssistantResponse,
+} from "@/lib/chatMessages";
 import { createLocalChat, getChatScope } from "@/lib/chatStore";
 import { useHydrated } from "@/lib/useHydrated";
-import SearchIcon from "@mui/icons-material/Search";
+import { useMessageSearch } from "@/lib/useMessageSearch";
 
 const getChatStorageKey = (sessionId: string) =>
   `deepscan:chat:${sessionId}:messages`;
@@ -33,30 +41,7 @@ const parseStoredMessages = (value: string | null): UIMessage[] => {
   }
 };
 
-const getMessageText = (message: UIMessage) =>
-  message.parts
-    .map((part) => (part.type === "text" ? part.text : ""))
-    .join("")
-    .trim();
-
-const getFirstUserMessageText = (messages: UIMessage[]) => {
-  const userMessage = messages.find((message) => message.role === "user");
-  return userMessage ? getMessageText(userMessage) : "";
-};
-
-const getLastUserMessageText = (messages: UIMessage[]) => {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    if (messages[i].role === "user") {
-      return getMessageText(messages[i]);
-    }
-  }
-  return "";
-};
-
-const hasAssistantResponse = (messages: UIMessage[]) =>
-  messages.some(
-    (message) => message.role === "assistant" && getMessageText(message).length > 0
-  );
+// message helpers moved to lib/chatMessages
 
 const MAX_DRAFT_PERSIST_RETRIES = 3;
 const DRAFT_PERSIST_RETRY_DELAY_MS = 1500;
@@ -88,16 +73,17 @@ function ChatSession({
     id: string;
     previousInput: string;
   } | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeMatchIndex, setActiveMatchIndex] = useState(0);
   const hasAutoSentInitialRef = useRef(false);
   const draftPersistStateRef = useRef<"idle" | "pending" | "done">("idle");
   const persistRetryCountRef = useRef(0);
   const persistRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const chatTransport = useMemo(() => createChatTransport(), []);
+
   const { messages, sendMessage, regenerate, error, status, stop, clearError } =
     useChat({
       id: sessionId,
+      transport: chatTransport,
       messages: initialMessages,
       onError: (err) => console.error("Chat error:", err),
     });
@@ -106,25 +92,22 @@ function ChatSession({
   const endRef = useRef<HTMLDivElement>(null);
   const messageCount = messages?.length ?? 0;
   const isEditing = Boolean(editTarget);
-  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    matchIds: searchMatchIds,
+    matchIdSet: searchMatchIdSet,
+    activeMatchId,
+    activeMatchIndex,
+    goPrev: handleSearchPrev,
+    goNext: handleSearchNext,
+    clear: clearSearch,
+    normalizedQuery: normalizedSearchQuery,
+  } = useMessageSearch(messages ?? []);
   const lastUserMessageText = useMemo(
     () => getLastUserMessageText(messages ?? []),
     [messages]
   );
-  const searchMatchIds = useMemo(() => {
-    if (!normalizedSearchQuery) return [];
-    return (messages ?? [])
-      .filter((message) =>
-        getMessageText(message).toLowerCase().includes(normalizedSearchQuery)
-      )
-      .map((message) => message.id);
-  }, [messages, normalizedSearchQuery]);
-  const searchMatchIdSet = useMemo(
-    () => new Set(searchMatchIds),
-    [searchMatchIds]
-  );
-  const activeMatchId =
-    searchMatchIds.length > 0 ? searchMatchIds[activeMatchIndex] : null;
   const lastAssistantMessageId = useMemo(() => {
     if (!messages?.length) return null;
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -164,27 +147,6 @@ function ChatSession({
       }
     };
   }, []);
-
-  useEffect(() => {
-    setActiveMatchIndex(0);
-  }, [normalizedSearchQuery]);
-
-  useEffect(() => {
-    if (searchMatchIds.length === 0) {
-      setActiveMatchIndex(0);
-      return;
-    }
-    setActiveMatchIndex((prev) => Math.min(prev, searchMatchIds.length - 1));
-  }, [searchMatchIds.length]);
-
-  useEffect(() => {
-    if (!activeMatchId || typeof document === "undefined") return;
-    const target = document.querySelector(
-      `[data-message-id="${activeMatchId}"]`
-    );
-    if (!target) return;
-    target.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [activeMatchId]);
 
   useEffect(() => {
     if (!editTarget) return;
@@ -315,20 +277,6 @@ function ChatSession({
     setEditTarget(null);
   };
 
-  const handleSearchPrev = () => {
-    if (searchMatchIds.length === 0) return;
-    setActiveMatchIndex((prev) =>
-      prev === 0 ? searchMatchIds.length - 1 : prev - 1
-    );
-  };
-
-  const handleSearchNext = () => {
-    if (searchMatchIds.length === 0) return;
-    setActiveMatchIndex((prev) =>
-      prev === searchMatchIds.length - 1 ? 0 : prev + 1
-    );
-  };
-
   return (
     <div className="flex h-screen flex-col bg-slate-50 dark:bg-slate-900">
       <ChatHeader
@@ -340,50 +288,16 @@ function ChatSession({
         <div className="flex w-full max-w-4xl flex-1 flex-col gap-4 overflow-auto px-4 py-4 md:px-6">
           {error && <ErrorDisplay error={error} onDismiss={clearError} />}
           {persistError ? <ErrorDisplay error={persistError} /> : null}
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-            <SearchIcon fontSize="small" className="text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜索当前会话消息..."
-              className="min-w-[160px] flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200"
-            />
-            {normalizedSearchQuery ? (
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                {searchMatchIds.length > 0
-                  ? `${activeMatchIndex + 1}/${searchMatchIds.length}`
-                  : "无匹配"}
-              </span>
-            ) : null}
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={handleSearchPrev}
-                disabled={searchMatchIds.length === 0}
-                className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                上一个
-              </button>
-              <button
-                type="button"
-                onClick={handleSearchNext}
-                disabled={searchMatchIds.length === 0}
-                className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                下一个
-              </button>
-            </div>
-            {searchQuery ? (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                清除
-              </button>
-            ) : null}
-          </div>
+          <ChatMessageSearchBar
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            matchCount={searchMatchIds.length}
+            activeIndex={activeMatchIndex}
+            onPrev={handleSearchPrev}
+            onNext={handleSearchNext}
+            onClear={clearSearch}
+            hasQuery={Boolean(normalizedSearchQuery)}
+          />
           {messages?.length === 0 && !error ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 text-gray-500 dark:text-slate-400">
               <p className="text-sm">开始新对话</p>
