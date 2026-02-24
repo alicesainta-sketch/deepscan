@@ -1,7 +1,8 @@
 import type { ChatModel } from "@/types/chat";
 
-const CHAT_STORE_KEY = "deepscan:chat-store:v1";
-const CHAT_STORE_VERSION = 1;
+const CHAT_STORE_KEY = "deepscan:chat-store";
+const LEGACY_CHAT_STORE_KEY = "deepscan:chat-store:v1";
+const CHAT_STORE_VERSION = 2;
 
 type ChatStoreState = {
   version: number;
@@ -49,38 +50,87 @@ const sortChats = (chats: ChatModel[]) => {
   });
 };
 
+const coerceVersion = (value: unknown) =>
+  typeof value === "number" && Number.isFinite(value) ? value : 1;
+
+const normalizeChatsByScope = (sourceScopes: unknown) => {
+  const chatsByScope: Record<string, ChatModel[]> = {};
+  let maxChatId = 0;
+
+  if (sourceScopes && typeof sourceScopes === "object") {
+    Object.entries(sourceScopes as Record<string, unknown>).forEach(
+      ([scope, chats]) => {
+        const normalizedChats = Array.isArray(chats)
+          ? chats.map((chat, index) =>
+              normalizeChat(chat as Partial<ChatModel>, index + 1)
+            )
+          : [];
+        normalizedChats.forEach((chat) => {
+          if (chat.id > maxChatId) maxChatId = chat.id;
+        });
+        chatsByScope[scope] = sortChats(normalizedChats);
+      }
+    );
+  }
+
+  return { chatsByScope, maxChatId };
+};
+
+const migrateStore = (raw: unknown): ChatStoreState => {
+  if (!raw || typeof raw !== "object") return getDefaultState();
+
+  const candidate = raw as {
+    version?: unknown;
+    nextChatId?: unknown;
+    chatsByScope?: unknown;
+  };
+
+  const storedVersion = coerceVersion(candidate.version);
+  const { chatsByScope, maxChatId } = normalizeChatsByScope(
+    candidate.chatsByScope
+  );
+  const storedNextChatId =
+    typeof candidate.nextChatId === "number" && candidate.nextChatId > 0
+      ? candidate.nextChatId
+      : 1;
+  const nextChatId = Math.max(storedNextChatId, maxChatId + 1);
+
+  if (storedVersion > CHAT_STORE_VERSION) {
+    console.warn(
+      `Chat store version ${storedVersion} is newer than supported ${CHAT_STORE_VERSION}.`
+    );
+  }
+
+  return {
+    version: CHAT_STORE_VERSION,
+    nextChatId,
+    chatsByScope,
+  };
+};
+
 const readStore = (): ChatStoreState => {
   if (typeof window === "undefined") return getDefaultState();
 
   const raw = localStorage.getItem(CHAT_STORE_KEY);
-  if (!raw) return getDefaultState();
+  const legacyRaw = raw ? null : localStorage.getItem(LEGACY_CHAT_STORE_KEY);
+  const source = raw ?? legacyRaw;
+  if (!source) return getDefaultState();
 
   try {
-    const parsed = JSON.parse(raw) as Partial<ChatStoreState>;
-    const nextChatId =
-      typeof parsed.nextChatId === "number" && parsed.nextChatId > 0
-        ? parsed.nextChatId
-        : 1;
-    const sourceScopes =
-      parsed.chatsByScope && typeof parsed.chatsByScope === "object"
-        ? parsed.chatsByScope
-        : {};
+    const parsed = JSON.parse(source) as unknown;
+    const migrated = migrateStore(parsed);
 
-    const chatsByScope: Record<string, ChatModel[]> = {};
-    Object.entries(sourceScopes).forEach(([scope, chats]) => {
-      const normalizedChats = Array.isArray(chats)
-        ? chats.map((chat, index) =>
-            normalizeChat(chat as Partial<ChatModel>, index + 1)
-          )
-        : [];
-      chatsByScope[scope] = sortChats(normalizedChats);
-    });
+    const storedVersion = coerceVersion(
+      (parsed as { version?: unknown })?.version
+    );
+    if (legacyRaw || storedVersion !== CHAT_STORE_VERSION) {
+      writeStore(migrated);
+      if (legacyRaw) {
+        localStorage.removeItem(LEGACY_CHAT_STORE_KEY);
+      }
+    }
 
-    return {
-      version: CHAT_STORE_VERSION,
-      nextChatId,
-      chatsByScope,
-    };
+    return migrated;
   } catch {
     return getDefaultState();
   }
