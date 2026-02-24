@@ -12,8 +12,10 @@ import {
   listChats,
   updateLocalChat,
 } from "@/lib/chatStore";
+import type { ChatExportPayload } from "@/lib/chatStore";
 import { getStoredMessagesText } from "@/lib/chatMessageStorage";
 import type { ChatModel } from "@/types/chat";
+import ChatBulkActions from "@/components/ChatBulkActions";
 import AddIcon from "@mui/icons-material/Add";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import CheckIcon from "@mui/icons-material/Check";
@@ -96,6 +98,11 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
   const [actionError, setActionError] = React.useState("");
   const [actionNotice, setActionNotice] = React.useState("");
   const [busyChatId, setBusyChatId] = React.useState<number | null>(null);
+  const [bulkMode, setBulkMode] = React.useState(false);
+  const [bulkBusy, setBulkBusy] = React.useState(false);
+  const [selectedChatIds, setSelectedChatIds] = React.useState<Set<number>>(
+    () => new Set()
+  );
   const importInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
@@ -148,9 +155,139 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     () => groupChatsByRecency(filteredChats),
     [filteredChats]
   );
+  const selectedChats = React.useMemo(
+    () => chats.filter((chat) => selectedChatIds.has(chat.id)),
+    [chats, selectedChatIds]
+  );
 
   const handleCreateNewChat = () => {
     router.push(`/chat/new?draftId=${Date.now().toString(36)}`);
+  };
+
+  const downloadExportPayload = (payload: ChatExportPayload, filename: string) => {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const getExportFilename = (suffix: string) => {
+    const date = new Date().toISOString().slice(0, 10);
+    return `deepscan-chats-${suffix}-${date}.json`;
+  };
+
+  const handleToggleBulkMode = () => {
+    setActionError("");
+    setActionNotice("");
+    setEditingChatId(null);
+    setDraftTitle("");
+    setBulkMode((prev) => {
+      const next = !prev;
+      if (!next) {
+        setSelectedChatIds(new Set());
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectChat = (chatId: number) => {
+    setSelectedChatIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(chatId)) {
+        next.delete(chatId);
+      } else {
+        next.add(chatId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllFiltered = () => {
+    setSelectedChatIds(new Set(filteredChats.map((chat) => chat.id)));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedChatIds(new Set());
+  };
+
+  const runBulkAction = async (
+    task: () => Promise<void>,
+    notice?: string
+  ) => {
+    if (bulkBusy) return;
+    setActionError("");
+    setActionNotice("");
+    setBulkBusy(true);
+    try {
+      await task();
+      await queryClient.invalidateQueries({ queryKey: ["chats", chatScope] });
+      if (notice) {
+        setActionNotice(notice);
+      }
+      setSelectedChatIds(new Set());
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "操作失败，请重试");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkPin = () => {
+    const targets = Array.from(selectedChatIds);
+    if (targets.length === 0) return;
+    void runBulkAction(async () => {
+      await Promise.all(
+        targets.map((chatId) =>
+          updateLocalChat(chatScope, chatId, { pinned: true })
+        )
+      );
+    }, `已置顶 ${targets.length} 个会话`);
+  };
+
+  const handleBulkUnpin = () => {
+    const targets = Array.from(selectedChatIds);
+    if (targets.length === 0) return;
+    void runBulkAction(async () => {
+      await Promise.all(
+        targets.map((chatId) =>
+          updateLocalChat(chatScope, chatId, { pinned: false })
+        )
+      );
+    }, `已取消置顶 ${targets.length} 个会话`);
+  };
+
+  const handleBulkExport = () => {
+    const targets = selectedChats;
+    if (targets.length === 0) return;
+    void runBulkAction(async () => {
+      const payload = await exportLocalChats(chatScope);
+      const selectedPayload = {
+        ...payload,
+        chats: targets,
+      };
+      downloadExportPayload(selectedPayload, getExportFilename("selected"));
+    }, `已导出 ${targets.length} 个会话`);
+  };
+
+  const handleBulkDelete = () => {
+    const targets = Array.from(selectedChatIds);
+    if (targets.length === 0) return;
+    if (!window.confirm(`确认删除 ${targets.length} 个会话？此操作不可撤销。`)) {
+      return;
+    }
+    void runBulkAction(async () => {
+      await Promise.all(
+        targets.map((chatId) => deleteLocalChat(chatScope, chatId))
+      );
+      if (targets.some((chatId) => pathname === `/chat/${chatId}`)) {
+        router.push("/");
+      }
+    }, `已删除 ${targets.length} 个会话`);
   };
 
   const runAction = async (chatId: number, task: () => Promise<void>) => {
@@ -230,16 +367,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     setActionNotice("");
     try {
       const payload = await exportLocalChats(chatScope);
-      const blob = new Blob([JSON.stringify(payload, null, 2)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const date = new Date().toISOString().slice(0, 10);
-      link.href = url;
-      link.download = `deepscan-chats-${date}.json`;
-      link.click();
-      URL.revokeObjectURL(url);
+      downloadExportPayload(payload, getExportFilename("all"));
       setActionNotice(`已导出 ${payload.chats.length} 个会话`);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "导出失败");
@@ -465,10 +593,17 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
 
       {!collapsed ? (
         <>
-          <div className="px-5 pt-6">
+          <div className="flex items-center justify-between px-5 pt-6">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
               历史对话
             </p>
+            <button
+              type="button"
+              onClick={handleToggleBulkMode}
+              className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              {bulkMode ? "退出批量" : "批量操作"}
+            </button>
           </div>
           <div className="px-3 pt-2">
             <label className="relative block">
@@ -485,6 +620,22 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
               />
             </label>
           </div>
+          {bulkMode ? (
+            <div className="px-3 pt-2">
+              <ChatBulkActions
+                selectedCount={selectedChatIds.size}
+                totalCount={filteredChats.length}
+                isBusy={bulkBusy}
+                onSelectAll={handleSelectAllFiltered}
+                onClear={handleClearSelection}
+                onPin={handleBulkPin}
+                onUnpin={handleBulkUnpin}
+                onExport={handleBulkExport}
+                onDelete={handleBulkDelete}
+                onExit={handleToggleBulkMode}
+              />
+            </div>
+          ) : null}
         </>
       ) : null}
 
@@ -553,6 +704,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                     const isActive = pathname === `/chat/${chat.id}`;
                     const isEditing = editingChatId === chat.id;
                     const isBusy = busyChatId === chat.id;
+                    const isSelected = selectedChatIds.has(chat.id);
 
                     return (
                       <div
@@ -601,7 +753,26 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-start gap-1">
+                          <div className="flex items-start gap-2">
+                            {bulkMode ? (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleSelectChat(chat.id)}
+                                className={`mt-2 flex h-4 w-4 items-center justify-center rounded border ${
+                                  isSelected
+                                    ? "border-blue-500 bg-blue-500"
+                                    : "border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-900"
+                                }`}
+                                aria-label={isSelected ? "取消选择会话" : "选择会话"}
+                              >
+                                {isSelected ? (
+                                  <CheckIcon
+                                    fontSize="inherit"
+                                    className="text-white"
+                                  />
+                                ) : null}
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               className={`flex min-w-0 flex-1 flex-col items-start rounded-lg px-1.5 py-1.5 text-left transition ${
@@ -610,6 +781,10 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                                   : "text-slate-700 dark:text-slate-200"
                               }`}
                               onClick={() => {
+                                if (bulkMode) {
+                                  handleToggleSelectChat(chat.id);
+                                  return;
+                                }
                                 router.push(`/chat/${chat.id}`);
                               }}
                               disabled={isBusy}
@@ -634,46 +809,48 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                                 ) : null}
                               </div>
                             </button>
-                            <div className="flex shrink-0 items-center gap-0.5">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  void handleTogglePin(chat);
-                                }}
-                                disabled={isBusy}
-                                className="rounded-md p-1 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                                aria-label={chat.pinned ? "取消置顶" : "置顶会话"}
-                                title={chat.pinned ? "取消置顶" : "置顶"}
-                              >
-                                {chat.pinned ? (
-                                  <PushPinIcon fontSize="small" />
-                                ) : (
-                                  <PushPinOutlinedIcon fontSize="small" />
-                                )}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleStartEdit(chat)}
-                                disabled={isBusy}
-                                className="rounded-md p-1 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                                aria-label="重命名会话"
-                                title="重命名"
-                              >
-                                <EditOutlinedIcon fontSize="small" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  void handleDeleteChat(chat.id);
-                                }}
-                                disabled={isBusy}
-                                className="rounded-md p-1 text-slate-500 transition hover:bg-red-100 hover:text-red-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-red-900/40 dark:hover:text-red-300"
-                                aria-label="删除会话"
-                                title="删除"
-                              >
-                                <DeleteOutlineIcon fontSize="small" />
-                              </button>
-                            </div>
+                            {!bulkMode ? (
+                              <div className="flex shrink-0 items-center gap-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void handleTogglePin(chat);
+                                  }}
+                                  disabled={isBusy}
+                                  className="rounded-md p-1 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                                  aria-label={chat.pinned ? "取消置顶" : "置顶会话"}
+                                  title={chat.pinned ? "取消置顶" : "置顶"}
+                                >
+                                  {chat.pinned ? (
+                                    <PushPinIcon fontSize="small" />
+                                  ) : (
+                                    <PushPinOutlinedIcon fontSize="small" />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEdit(chat)}
+                                  disabled={isBusy}
+                                  className="rounded-md p-1 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                                  aria-label="重命名会话"
+                                  title="重命名"
+                                >
+                                  <EditOutlinedIcon fontSize="small" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void handleDeleteChat(chat.id);
+                                  }}
+                                  disabled={isBusy}
+                                  className="rounded-md p-1 text-slate-500 transition hover:bg-red-100 hover:text-red-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-red-900/40 dark:hover:text-red-300"
+                                  aria-label="删除会话"
+                                  title="删除"
+                                >
+                                  <DeleteOutlineIcon fontSize="small" />
+                                </button>
+                              </div>
+                            ) : null}
                           </div>
                         )}
                       </div>
