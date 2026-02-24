@@ -27,7 +27,9 @@ export default function ChatProviderSettingsModal({
     onSave({
       ...draft,
       apiUrl,
-      apiKeyHeader: draft.apiKeyHeader?.trim() || DEFAULT_CHAT_PROVIDER_CONFIG.apiKeyHeader,
+      apiKeyHeader:
+        draft.apiKeyHeader?.trim() ||
+        DEFAULT_CHAT_PROVIDER_CONFIG.apiKeyHeader,
       apiKeyPrefix:
         draft.apiKeyPrefix !== undefined
           ? draft.apiKeyPrefix
@@ -62,6 +64,23 @@ export default function ChatProviderSettingsModal({
 
         <div className="mt-4 space-y-3">
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+            接口模式
+            <select
+              value={draft.mode ?? DEFAULT_CHAT_PROVIDER_CONFIG.mode}
+              onChange={(e) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  mode: e.target.value as ChatProviderConfig["mode"],
+                }))
+              }
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-slate-500"
+            >
+              <option value="server">服务端（/api/chat）</option>
+              <option value="openai-compatible">直连（OpenAI Compatible）</option>
+            </select>
+          </label>
+
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
             API 地址
             <input
               value={draft.apiUrl}
@@ -83,6 +102,19 @@ export default function ChatProviderSettingsModal({
               }
               placeholder="sk-..."
               className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-slate-500"
+            />
+          </label>
+
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+            系统提示词（可选）
+            <textarea
+              rows={2}
+              value={draft.systemPrompt ?? ""}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, systemPrompt: e.target.value }))
+              }
+              placeholder={DEFAULT_CHAT_PROVIDER_CONFIG.systemPrompt}
+              className="mt-1 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-slate-500"
             />
           </label>
 

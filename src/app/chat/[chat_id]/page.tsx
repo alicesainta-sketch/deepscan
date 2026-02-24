@@ -283,7 +283,7 @@ function ChatSession({
 
   const handleSaveProviderConfig = (nextConfig: ChatProviderConfig) => {
     const normalizedLabel =
-      nextConfig.apiUrl === "/api/chat" ? "server" : "custom";
+      nextConfig.mode === "openai-compatible" ? "direct" : "server";
     const normalizedConfig = {
       ...nextConfig,
       label: normalizedLabel,
@@ -295,7 +295,7 @@ function ChatSession({
 
   const providerLabel =
     providerConfig.label ??
-    (providerConfig.apiUrl === "/api/chat" ? "server" : "custom");
+    (providerConfig.mode === "openai-compatible" ? "direct" : "server");
 
   return (
     <div className="flex h-screen flex-col bg-slate-50 dark:bg-slate-900">
