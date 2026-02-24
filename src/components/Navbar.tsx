@@ -12,6 +12,7 @@ import {
   listChats,
   updateLocalChat,
 } from "@/lib/chatStore";
+import { getStoredMessagesText } from "@/lib/chatMessageStorage";
 import type { ChatModel } from "@/types/chat";
 import AddIcon from "@mui/icons-material/Add";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
@@ -118,16 +119,30 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     staleTime: 10_000,
   });
 
+  const messageIndex = React.useMemo(() => {
+    if (!shouldLoadChats) return {};
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    if (!normalizedKeyword) return {};
+    if (typeof window === "undefined") return {};
+    const index: Record<number, string> = {};
+    chats.forEach((chat) => {
+      index[chat.id] = getStoredMessagesText(String(chat.id));
+    });
+    return index;
+  }, [chats, keyword, shouldLoadChats]);
+
   const filteredChats = React.useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
     if (!normalizedKeyword) return chats;
     return chats.filter((chat) => {
+      const messageText = messageIndex[chat.id] ?? "";
       return (
         chat.title.toLowerCase().includes(normalizedKeyword) ||
-        chat.model.toLowerCase().includes(normalizedKeyword)
+        chat.model.toLowerCase().includes(normalizedKeyword) ||
+        messageText.includes(normalizedKeyword)
       );
     });
-  }, [chats, keyword]);
+  }, [chats, keyword, messageIndex]);
 
   const groupedFilteredChats = React.useMemo(
     () => groupChatsByRecency(filteredChats),
@@ -465,7 +480,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                 type="text"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
-                placeholder="搜索标题或模型..."
+                placeholder="搜索标题、模型或消息..."
                 className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-sm text-slate-700 outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-slate-500"
               />
             </label>

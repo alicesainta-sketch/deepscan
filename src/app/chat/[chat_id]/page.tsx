@@ -30,22 +30,13 @@ import {
   getMessageText,
   hasAssistantResponse,
 } from "@/lib/chatMessages";
+import {
+  getChatMessagesStorageKey,
+  readStoredMessages,
+} from "@/lib/chatMessageStorage";
 import { createLocalChat, getChatScope } from "@/lib/chatStore";
 import { useHydrated } from "@/lib/useHydrated";
 import { useMessageSearch } from "@/lib/useMessageSearch";
-
-const getChatStorageKey = (sessionId: string) =>
-  `deepscan:chat:${sessionId}:messages`;
-
-const parseStoredMessages = (value: string | null): UIMessage[] => {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? (parsed as UIMessage[]) : [];
-  } catch {
-    return [];
-  }
-};
 
 // message helpers moved to lib/chatMessages
 
@@ -136,7 +127,10 @@ function ChatSession({
     if (typeof window === "undefined") {
       return;
     }
-    localStorage.setItem(getChatStorageKey(sessionId), JSON.stringify(messages ?? []));
+    localStorage.setItem(
+      getChatMessagesStorageKey(sessionId),
+      JSON.stringify(messages ?? [])
+    );
   }, [sessionId, messages]);
 
   useEffect(() => {
@@ -192,10 +186,10 @@ function ChatSession({
         const newSessionId = String(newChatId);
         if (typeof window !== "undefined") {
           localStorage.setItem(
-            getChatStorageKey(newSessionId),
+            getChatMessagesStorageKey(newSessionId),
             JSON.stringify(messages ?? [])
           );
-          localStorage.removeItem(getChatStorageKey(sessionId));
+          localStorage.removeItem(getChatMessagesStorageKey(sessionId));
         }
 
         await queryClient.invalidateQueries({ queryKey: ["chats", chatScope] });
@@ -416,7 +410,7 @@ function HydratedChatSession({
   const sessionId = isDraftSession ? `draft:${draftId ?? "default"}` : routeChatId;
   const initialMessages = useMemo(() => {
     if (!isHydrated) return [];
-    return parseStoredMessages(localStorage.getItem(getChatStorageKey(sessionId)));
+    return readStoredMessages(sessionId);
   }, [isHydrated, sessionId]);
 
   if (!isHydrated) {
