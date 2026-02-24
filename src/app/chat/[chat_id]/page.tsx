@@ -13,11 +13,17 @@ import {
 } from "react";
 import ChatHeader from "@/app/components/ChatHeader";
 import ChatMessageSearchBar from "@/app/components/ChatMessageSearchBar";
+import ChatProviderSettingsModal from "@/app/components/ChatProviderSettingsModal";
 import ErrorDisplay from "@/app/components/ErrorDisplay";
 import InputField from "@/app/components/InputField";
 import LoadingIndicator from "@/app/components/LoadingIndicator";
 import MessageList from "@/app/components/MessageList";
-import { createChatTransport } from "@/lib/chatProviderAdapter";
+import {
+  createChatTransport,
+  type ChatProviderConfig,
+  loadChatProviderConfig,
+  saveChatProviderConfig,
+} from "@/lib/chatProviderAdapter";
 import {
   getFirstUserMessageText,
   getLastUserMessageText,
@@ -73,6 +79,10 @@ function ChatSession({
     id: string;
     previousInput: string;
   } | null>(null);
+  const [providerConfig, setProviderConfig] = useState(() =>
+    loadChatProviderConfig()
+  );
+  const [isProviderSettingsOpen, setIsProviderSettingsOpen] = useState(false);
   const hasAutoSentInitialRef = useRef(false);
   const draftPersistStateRef = useRef<"idle" | "pending" | "done">("idle");
   const persistRetryCountRef = useRef(0);
@@ -277,12 +287,30 @@ function ChatSession({
     setEditTarget(null);
   };
 
+  const handleSaveProviderConfig = (nextConfig: ChatProviderConfig) => {
+    const normalizedLabel =
+      nextConfig.apiUrl === "/api/chat" ? "server" : "custom";
+    const normalizedConfig = {
+      ...nextConfig,
+      label: normalizedLabel,
+    };
+    saveChatProviderConfig(normalizedConfig);
+    setProviderConfig(normalizedConfig);
+    setIsProviderSettingsOpen(false);
+  };
+
+  const providerLabel =
+    providerConfig.label ??
+    (providerConfig.apiUrl === "/api/chat" ? "server" : "custom");
+
   return (
     <div className="flex h-screen flex-col bg-slate-50 dark:bg-slate-900">
       <ChatHeader
         status={isLoading ? "loading" : "idle"}
         model={model}
         onModelToggle={handleChangeModel}
+        onOpenSettings={() => setIsProviderSettingsOpen(true)}
+        providerLabel={providerLabel}
       />
       <div className="flex flex-1 flex-col items-center overflow-hidden">
         <div className="flex w-full max-w-4xl flex-1 flex-col gap-4 overflow-auto px-4 py-4 md:px-6">
@@ -360,6 +388,12 @@ function ChatSession({
           />
         </div>
       </div>
+      <ChatProviderSettingsModal
+        open={isProviderSettingsOpen}
+        config={providerConfig}
+        onClose={() => setIsProviderSettingsOpen(false)}
+        onSave={handleSaveProviderConfig}
+      />
     </div>
   );
 }
