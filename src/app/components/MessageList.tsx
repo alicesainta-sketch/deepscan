@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -29,13 +29,43 @@ function CodeBlock({
   className?: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const isMountedRef = useRef(true);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const match = /language-(\w+)/.exec(className ?? "");
   const code = String(children ?? "").replace(/\n$/, "");
 
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (resetTimerRef.current) {
+        clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      return;
+    }
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = null;
+    }
+    void navigator.clipboard
+      .writeText(code)
+      .then(() => {
+        if (!isMountedRef.current) return;
+        setCopied(true);
+        resetTimerRef.current = setTimeout(() => {
+          if (!isMountedRef.current) return;
+          setCopied(false);
+        }, 1500);
+      })
+      .catch(() => {
+        if (!isMountedRef.current) return;
+        setCopied(false);
+      });
   };
 
   return (
@@ -106,14 +136,44 @@ function MessageItem({
   const content = getMessageContent(message);
   const [copied, setCopied] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const isMountedRef = useRef(true);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongMessage =
     content.length > 1200 || content.split(/\n/).length > 14;
 
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (resetTimerRef.current) {
+        clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const handleCopy = () => {
     if (!content.trim()) return;
-    navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      return;
+    }
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = null;
+    }
+    void navigator.clipboard
+      .writeText(content)
+      .then(() => {
+        if (!isMountedRef.current) return;
+        setCopied(true);
+        resetTimerRef.current = setTimeout(() => {
+          if (!isMountedRef.current) return;
+          setCopied(false);
+        }, 1500);
+      })
+      .catch(() => {
+        if (!isMountedRef.current) return;
+        setCopied(false);
+      });
   };
 
   return (
