@@ -39,9 +39,9 @@ export const useMessageSearch = (messages: UIMessage[]): MessageSearchState => {
 
   useEffect(() => {
     if (!activeMatchId || typeof document === "undefined") return;
-    const target = document.querySelector(
-      `[data-message-id="${activeMatchId}"]`
-    );
+    const target = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-message-id]")
+    ).find((element) => element.dataset.messageId === activeMatchId);
     if (!target) return;
     target.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [activeMatchId]);
