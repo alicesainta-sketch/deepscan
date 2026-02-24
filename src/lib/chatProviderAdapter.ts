@@ -226,9 +226,19 @@ class OpenAICompatibleChatTransport implements ChatTransport<UIMessage> {
                   return;
                 }
 
-                let payload: any;
+                let payload: {
+                  choices?: Array<{
+                    delta?: { content?: string };
+                    finish_reason?: string | null;
+                  }>;
+                };
                 try {
-                  payload = JSON.parse(data);
+                  payload = JSON.parse(data) as {
+                    choices?: Array<{
+                      delta?: { content?: string };
+                      finish_reason?: string | null;
+                    }>;
+                  };
                 } catch {
                   continue;
                 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useState } from "react";
+import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -32,11 +32,11 @@ function CodeBlock({
   const match = /language-(\w+)/.exec(className ?? "");
   const code = String(children ?? "").replace(/\n$/, "");
 
-  const handleCopy = useCallback(() => {
+  const handleCopy = () => {
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
-  }, [code]);
+  };
 
   return (
     <div className="group relative my-2 overflow-hidden rounded-lg">
@@ -109,12 +109,12 @@ function MessageItem({
   const isLongMessage =
     content.length > 1200 || content.split(/\n/).length > 14;
 
-  const handleCopy = useCallback(() => {
+  const handleCopy = () => {
     if (!content.trim()) return;
     navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
-  }, [content]);
+  };
 
   return (
     <div
