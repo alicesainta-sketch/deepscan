@@ -206,125 +206,147 @@ function MessageItem({
       }`}
     >
       <div
-        className={`max-w-[92%] rounded-lg px-4 py-2 md:max-w-[85%] ${
-          isAssistant
-            ? "bg-blue-100 text-gray-900 dark:bg-blue-900/30 dark:text-slate-100"
-            : "bg-slate-200 text-gray-900 dark:bg-slate-700 dark:text-slate-100"
-        } ${
-          isEditing
-            ? "ring-2 ring-blue-300 ring-offset-2 ring-offset-white dark:ring-blue-700 dark:ring-offset-slate-900"
-            : isActiveMatch
-              ? "ring-2 ring-amber-400 ring-offset-2 ring-offset-white dark:ring-amber-500 dark:ring-offset-slate-900"
-              : isMatch
-                ? "ring-1 ring-amber-300 ring-offset-2 ring-offset-white dark:ring-amber-700 dark:ring-offset-slate-900"
-            : ""
+        className={`flex max-w-[92%] items-start gap-3 md:max-w-[85%] ${
+          isAssistant ? "flex-row" : "flex-row-reverse"
         }`}
       >
         <div
-          className={`relative ${
-            isLongMessage && !isExpanded ? "max-h-40 overflow-hidden" : ""
+          className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+            isAssistant
+              ? "bg-blue-500/10 text-blue-700 dark:bg-blue-400/20 dark:text-blue-200"
+              : "bg-slate-500/10 text-slate-700 dark:bg-slate-400/20 dark:text-slate-200"
+          }`}
+          aria-hidden
+        >
+          {isAssistant ? "AI" : "你"}
+        </div>
+        <div
+          className={`flex-1 rounded-lg px-4 py-2 ${
+            isAssistant
+              ? "bg-blue-100 text-gray-900 dark:bg-blue-900/30 dark:text-slate-100"
+              : "bg-slate-200 text-gray-900 dark:bg-slate-700 dark:text-slate-100"
+          } ${
+            isEditing
+              ? "ring-2 ring-blue-300 ring-offset-2 ring-offset-white dark:ring-blue-700 dark:ring-offset-slate-900"
+              : isActiveMatch
+                ? "ring-2 ring-amber-400 ring-offset-2 ring-offset-white dark:ring-amber-500 dark:ring-offset-slate-900"
+                : isMatch
+                  ? "ring-1 ring-amber-300 ring-offset-2 ring-offset-white dark:ring-amber-700 dark:ring-offset-slate-900"
+              : ""
           }`}
         >
-          <div className="prose prose-sm max-w-none break-words dark:prose-invert">
-            {isAssistant ? (
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  code({
-                    inline,
-                    className,
-                    children,
-                    ...props
-                  }: {
-                    inline?: boolean;
-                    className?: string;
-                    children?: React.ReactNode;
-                  }) {
-                    const isInline = Boolean(inline);
-                    if (isInline) {
-                      return (
-                        <code
-                          className="rounded bg-gray-200 px-1 py-0.5 font-mono text-sm dark:bg-slate-700"
-                          {...props}
-                        >
-                          {children}
-                        </code>
-                      );
-                    }
-                    return (
-                      <CodeBlock className={className}>
-                        {String(children).replace(/\n$/, "")}
-                      </CodeBlock>
-                    );
-                  },
-                  p: ({ children }: { children?: React.ReactNode }) => (
-                    <p className="mb-2 last:mb-0">{children}</p>
-                  ),
-                  ul: ({ children }: { children?: React.ReactNode }) => (
-                    <ul className="my-2 list-disc pl-5">{children}</ul>
-                  ),
-                  ol: ({ children }: { children?: React.ReactNode }) => (
-                    <ol className="my-2 list-decimal pl-5">{children}</ol>
-                  ),
-                }}
-              >
-                {content}
-              </ReactMarkdown>
-            ) : (
-              <div className="whitespace-pre-wrap text-sm">{content}</div>
-            )}
+          <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+            <span className="font-medium">
+              {isAssistant ? "助手" : "你"}
+            </span>
+            {isEditing ? <span>编辑中</span> : null}
           </div>
-          {isLongMessage && !isExpanded ? (
-            <div
-              className={`pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t ${
-                isAssistant
-                  ? "from-blue-100 dark:from-blue-900/30"
-                  : "from-slate-200 dark:from-slate-700"
-              } to-transparent`}
-            />
-          ) : null}
-        </div>
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-          {isAssistant && metrics ? (
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-              {metrics.ttftMs !== undefined ? (
-                <span>首字 {formatDuration(metrics.ttftMs)}</span>
-              ) : null}
-              {metrics.totalMs !== undefined ? (
-                <span>耗时 {formatDuration(metrics.totalMs)}</span>
-              ) : null}
-              {metrics.charCount !== undefined ? (
-                <span>字数 {formatCount(metrics.charCount)}</span>
-              ) : null}
-            </div>
-          ) : (
-            <div />
-          )}
-          {isLongMessage ? (
-            <button
-              type="button"
-              onClick={() => setIsExpanded((prev) => !prev)}
-              className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus:opacity-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              {isExpanded ? "收起" : "展开"}
-            </button>
-          ) : null}
-          {!isAssistant && onEditMessage ? (
-            <button
-              type="button"
-              onClick={() => onEditMessage(message)}
-              className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus:opacity-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              编辑
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus:opacity-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+          <div
+            className={`relative ${
+              isLongMessage && !isExpanded ? "max-h-40 overflow-hidden" : ""
+            }`}
           >
-            {copied ? "已复制" : "复制文本"}
-          </button>
+            <div className="prose prose-sm max-w-none break-words dark:prose-invert">
+              {isAssistant ? (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    code({
+                      inline,
+                      className,
+                      children,
+                      ...props
+                    }: {
+                      inline?: boolean;
+                      className?: string;
+                      children?: React.ReactNode;
+                    }) {
+                      const isInline = Boolean(inline);
+                      if (isInline) {
+                        return (
+                          <code
+                            className="rounded bg-gray-200 px-1 py-0.5 font-mono text-sm dark:bg-slate-700"
+                            {...props}
+                          >
+                            {children}
+                          </code>
+                        );
+                      }
+                      return (
+                        <CodeBlock className={className}>
+                          {String(children).replace(/\n$/, "")}
+                        </CodeBlock>
+                      );
+                    },
+                    p: ({ children }: { children?: React.ReactNode }) => (
+                      <p className="mb-2 last:mb-0">{children}</p>
+                    ),
+                    ul: ({ children }: { children?: React.ReactNode }) => (
+                      <ul className="my-2 list-disc pl-5">{children}</ul>
+                    ),
+                    ol: ({ children }: { children?: React.ReactNode }) => (
+                      <ol className="my-2 list-decimal pl-5">{children}</ol>
+                    ),
+                  }}
+                >
+                  {content}
+                </ReactMarkdown>
+              ) : (
+                <div className="whitespace-pre-wrap text-sm">{content}</div>
+              )}
+            </div>
+            {isLongMessage && !isExpanded ? (
+              <div
+                className={`pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t ${
+                  isAssistant
+                    ? "from-blue-100 dark:from-blue-900/30"
+                    : "from-slate-200 dark:from-slate-700"
+                } to-transparent`}
+              />
+            ) : null}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            {isAssistant && metrics ? (
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                {metrics.ttftMs !== undefined ? (
+                  <span>首字 {formatDuration(metrics.ttftMs)}</span>
+                ) : null}
+                {metrics.totalMs !== undefined ? (
+                  <span>耗时 {formatDuration(metrics.totalMs)}</span>
+                ) : null}
+                {metrics.charCount !== undefined ? (
+                  <span>字数 {formatCount(metrics.charCount)}</span>
+                ) : null}
+              </div>
+            ) : (
+              <div />
+            )}
+            {isLongMessage ? (
+              <button
+                type="button"
+                onClick={() => setIsExpanded((prev) => !prev)}
+                className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus:opacity-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                {isExpanded ? "收起" : "展开"}
+              </button>
+            ) : null}
+            {!isAssistant && onEditMessage ? (
+              <button
+                type="button"
+                onClick={() => onEditMessage(message)}
+                className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus:opacity-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                编辑
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus:opacity-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              {copied ? "已复制" : "复制文本"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

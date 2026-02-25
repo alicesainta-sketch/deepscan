@@ -125,6 +125,8 @@ function ChatSession({
 
   const isLoading = status === "streaming" || status === "submitted";
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const messageCount = messages?.length ?? 0;
   const isEditing = Boolean(editTarget);
   const {
@@ -218,6 +220,19 @@ function ChatSession({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messageCount]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      const distanceToBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      setShowScrollToBottom(distanceToBottom > 160);
+    };
+    handleScroll();
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -409,7 +424,10 @@ function ChatSession({
         providerLabel={providerLabel}
       />
       <div className="flex flex-1 flex-col items-center overflow-hidden">
-        <div className="flex w-full max-w-4xl flex-1 flex-col gap-4 overflow-auto px-4 py-4 md:px-6">
+        <div
+          ref={scrollContainerRef}
+          className="flex w-full max-w-4xl flex-1 flex-col gap-4 overflow-auto px-4 py-4 md:px-6"
+        >
           {error && <ErrorDisplay error={error} onDismiss={clearError} />}
           {persistError ? <ErrorDisplay error={persistError} /> : null}
           <ChatMessageSearchBar
@@ -467,6 +485,19 @@ function ChatSession({
           )}
           <div ref={endRef} className="h-4" />
         </div>
+        {showScrollToBottom ? (
+          <div className="w-full max-w-4xl px-4 pb-2 md:px-6">
+            <button
+              type="button"
+              onClick={() =>
+                endRef.current?.scrollIntoView({ behavior: "smooth" })
+              }
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              回到底部
+            </button>
+          </div>
+        ) : null}
         <div className="w-full max-w-4xl shrink-0 px-4 pb-4 md:px-6">
           {isEditing ? (
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-700/70 dark:bg-blue-900/30 dark:text-blue-200">
