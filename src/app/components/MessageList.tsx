@@ -15,6 +15,7 @@ interface MessageListProps {
   activeMessageId?: string | null;
   messageMetrics?: Record<string, MessageMetrics>;
   highlightQuery?: string;
+  density?: "comfort" | "compact";
 }
 
 export type MessageMetrics = {
@@ -157,9 +158,11 @@ export default function MessageList({
   activeMessageId,
   messageMetrics,
   highlightQuery,
+  density = "comfort",
 }: MessageListProps) {
+  const isCompact = density === "compact";
   return (
-    <div className="flex flex-col gap-6">
+    <div className={`flex flex-col ${isCompact ? "gap-4" : "gap-6"}`}>
       {messages.map((message) => (
         <MessageItem
           key={message.id}
@@ -170,6 +173,7 @@ export default function MessageList({
           isActiveMatch={activeMessageId === message.id}
           metrics={messageMetrics?.[message.id]}
           highlightQuery={highlightQuery}
+          density={density}
         />
       ))}
     </div>
@@ -184,6 +188,7 @@ function MessageItem({
   isActiveMatch,
   metrics,
   highlightQuery,
+  density,
 }: {
   message: UIMessage;
   onEditMessage?: (message: UIMessage) => void;
@@ -192,6 +197,7 @@ function MessageItem({
   isActiveMatch: boolean;
   metrics?: MessageMetrics;
   highlightQuery?: string;
+  density: "comfort" | "compact";
 }) {
   const isAssistant = message.role === "assistant";
   const content = getMessageContent(message);
@@ -201,6 +207,7 @@ function MessageItem({
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongMessage =
     content.length > 1200 || content.split(/\n/).length > 14;
+  const isCompact = density === "compact";
   const shouldHighlight =
     Boolean(highlightQuery) && (isMatch || isActiveMatch);
   const highlightedContent =
@@ -256,7 +263,9 @@ function MessageItem({
         }`}
       >
         <div
-          className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+          className={`mt-1 flex shrink-0 items-center justify-center rounded-full font-semibold ${
+            isCompact ? "h-7 w-7 text-[10px]" : "h-8 w-8 text-xs"
+          } ${
             isAssistant
               ? "bg-blue-500/10 text-blue-700 dark:bg-blue-400/20 dark:text-blue-200"
               : "bg-slate-500/10 text-slate-700 dark:bg-slate-400/20 dark:text-slate-200"
@@ -266,7 +275,9 @@ function MessageItem({
           {isAssistant ? "AI" : "你"}
         </div>
         <div
-          className={`flex-1 rounded-lg px-4 py-2 ${
+          className={`flex-1 rounded-lg ${
+            isCompact ? "px-3 py-1.5" : "px-4 py-2"
+          } ${
             isAssistant
               ? "bg-blue-100 text-gray-900 dark:bg-blue-900/30 dark:text-slate-100"
               : "bg-slate-200 text-gray-900 dark:bg-slate-700 dark:text-slate-100"
@@ -349,7 +360,11 @@ function MessageItem({
                   {content}
                 </ReactMarkdown>
               ) : (
-                <div className="whitespace-pre-wrap text-sm">
+                <div
+                  className={`whitespace-pre-wrap ${
+                    isCompact ? "text-[13px]" : "text-sm"
+                  }`}
+                >
                   {highlightedContent}
                 </div>
               )}

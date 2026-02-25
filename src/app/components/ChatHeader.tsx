@@ -7,6 +7,8 @@ interface ChatHeaderProps {
   onModelToggle: () => void;
   onOpenSettings?: () => void;
   providerLabel?: string;
+  density?: "comfort" | "compact";
+  onDensityToggle?: () => void;
 }
 
 export default function ChatHeader({
@@ -16,6 +18,8 @@ export default function ChatHeader({
   onModelToggle,
   onOpenSettings,
   providerLabel,
+  density = "comfort",
+  onDensityToggle,
 }: ChatHeaderProps) {
   return (
     <header className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
@@ -42,6 +46,17 @@ export default function ChatHeader({
         >
           {model === "deepseek-r1" ? "深度思考 R1" : "DeepSeek V3"}
         </button>
+        {onDensityToggle ? (
+          <button
+            type="button"
+            onClick={onDensityToggle}
+            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            aria-label="切换密度"
+            title="切换消息密度"
+          >
+            {density === "compact" ? "紧凑" : "舒适"}
+          </button>
+        ) : null}
         {onOpenSettings ? (
           <button
             type="button"

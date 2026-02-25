@@ -43,6 +43,7 @@ import { useMessageSearch } from "@/lib/useMessageSearch";
 
 const MAX_DRAFT_PERSIST_RETRIES = 3;
 const DRAFT_PERSIST_RETRY_DELAY_MS = 1500;
+const DENSITY_STORAGE_KEY = "deepscan:ui-density";
 const QUICK_PROMPTS = [
   {
     title: "会议纪要",
@@ -103,6 +104,11 @@ function ChatSession({
     loadChatProviderConfig()
   );
   const [isProviderSettingsOpen, setIsProviderSettingsOpen] = useState(false);
+  const [density, setDensity] = useState<"comfort" | "compact">(() => {
+    if (typeof window === "undefined") return "comfort";
+    const stored = localStorage.getItem(DENSITY_STORAGE_KEY);
+    return stored === "compact" ? "compact" : "comfort";
+  });
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const hasAutoSentInitialRef = useRef(false);
   const draftPersistStateRef = useRef<"idle" | "pending" | "done">("idle");
@@ -243,6 +249,11 @@ function ChatSession({
       JSON.stringify(messages ?? [])
     );
   }, [sessionId, messages]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(DENSITY_STORAGE_KEY, density);
+  }, [density]);
 
   useEffect(() => {
     if (!isDraftSession) return;
@@ -413,6 +424,9 @@ function ChatSession({
       inputRef.current?.focus();
     });
   };
+  const handleToggleDensity = () => {
+    setDensity((prev) => (prev === "compact" ? "comfort" : "compact"));
+  };
 
   return (
     <div className="flex h-screen flex-col bg-slate-50 dark:bg-slate-900">
@@ -420,6 +434,8 @@ function ChatSession({
         status={isLoading ? "loading" : "idle"}
         model={model}
         onModelToggle={handleChangeModel}
+        density={density}
+        onDensityToggle={handleToggleDensity}
         onOpenSettings={() => setIsProviderSettingsOpen(true)}
         providerLabel={providerLabel}
       />
@@ -481,6 +497,7 @@ function ChatSession({
               activeMessageId={activeMatchId}
               messageMetrics={messageMetrics}
               highlightQuery={normalizedSearchQuery}
+              density={density}
             />
           )}
           {isLoading && (
