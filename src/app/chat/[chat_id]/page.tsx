@@ -430,17 +430,21 @@ function ChatSession({
         >
           {error && <ErrorDisplay error={error} onDismiss={clearError} />}
           {persistError ? <ErrorDisplay error={persistError} /> : null}
-          <ChatMessageSearchBar
-            query={searchQuery}
-            onQueryChange={setSearchQuery}
-            matchCount={searchMatchIds.length}
-            activeIndex={activeMatchIndex}
-            onPrev={handleSearchPrev}
-            onNext={handleSearchNext}
-            onClear={clearSearch}
-            hasQuery={Boolean(normalizedSearchQuery)}
-          />
-          <ChatInsightsBar messages={messages ?? []} isLoading={isLoading} />
+          <div className="sticky top-0 z-10 -mx-4 border-b border-slate-200/60 bg-slate-50/80 px-4 py-2 backdrop-blur dark:border-slate-700/60 dark:bg-slate-900/80 md:-mx-6 md:px-6">
+            <div className="flex flex-col gap-2">
+              <ChatMessageSearchBar
+                query={searchQuery}
+                onQueryChange={setSearchQuery}
+                matchCount={searchMatchIds.length}
+                activeIndex={activeMatchIndex}
+                onPrev={handleSearchPrev}
+                onNext={handleSearchNext}
+                onClear={clearSearch}
+                hasQuery={Boolean(normalizedSearchQuery)}
+              />
+              <ChatInsightsBar messages={messages ?? []} isLoading={isLoading} />
+            </div>
+          </div>
           {messages?.length === 0 && !error ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 text-gray-500 dark:text-slate-400">
               <p className="text-sm">开始新对话</p>
