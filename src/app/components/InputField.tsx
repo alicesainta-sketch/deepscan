@@ -23,6 +23,9 @@ export default function InputField({
   placeholder = "输入消息…",
   textareaRef,
 }: InputFieldProps) {
+  const trimmedInput = input.trim();
+  const charCount = trimmedInput.length;
+  const tokenEstimate = charCount > 0 ? Math.ceil(charCount / 4) : 0;
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -46,9 +49,18 @@ export default function InputField({
         disabled={isLoading}
       />
       <div className="flex items-center justify-between border-t border-gray-200 px-2 py-2 dark:border-slate-700">
-        <span className="text-xs text-gray-400 dark:text-slate-500">
-          Enter 发送，Shift+Enter 换行
-        </span>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400 dark:text-slate-500">
+          <span>Enter 发送，Shift+Enter 换行</span>
+          {charCount > 0 ? (
+            <span className="rounded-full border border-gray-200 px-2 py-0.5 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
+              字数 {charCount} · 约 {tokenEstimate} tokens
+            </span>
+          ) : (
+            <span className="text-[11px] text-slate-400 dark:text-slate-600">
+              输入后显示字数与 token 估算
+            </span>
+          )}
+        </div>
         {isLoading && onStop ? (
           <button
             type="button"
