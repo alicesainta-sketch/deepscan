@@ -6,6 +6,10 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
 import type { UIMessage } from "ai";
+import ThumbDownAltIcon from "@mui/icons-material/ThumbDownAlt";
+import ThumbDownAltOutlinedIcon from "@mui/icons-material/ThumbDownAltOutlined";
+import ThumbUpAltIcon from "@mui/icons-material/ThumbUpAlt";
+import ThumbUpAltOutlinedIcon from "@mui/icons-material/ThumbUpAltOutlined";
 
 interface MessageListProps {
   messages: UIMessage[];
@@ -16,6 +20,8 @@ interface MessageListProps {
   messageMetrics?: Record<string, MessageMetrics>;
   highlightQuery?: string;
   density?: "comfort" | "compact";
+  messageFeedback?: Record<string, "up" | "down">;
+  onFeedback?: (messageId: string, value: "up" | "down") => void;
 }
 
 export type MessageMetrics = {
@@ -159,6 +165,8 @@ export default function MessageList({
   messageMetrics,
   highlightQuery,
   density = "comfort",
+  messageFeedback,
+  onFeedback,
 }: MessageListProps) {
   const isCompact = density === "compact";
   return (
@@ -174,6 +182,8 @@ export default function MessageList({
           metrics={messageMetrics?.[message.id]}
           highlightQuery={highlightQuery}
           density={density}
+          feedback={messageFeedback?.[message.id]}
+          onFeedback={onFeedback}
         />
       ))}
     </div>
@@ -189,6 +199,8 @@ function MessageItem({
   metrics,
   highlightQuery,
   density,
+  feedback,
+  onFeedback,
 }: {
   message: UIMessage;
   onEditMessage?: (message: UIMessage) => void;
@@ -198,6 +210,8 @@ function MessageItem({
   metrics?: MessageMetrics;
   highlightQuery?: string;
   density: "comfort" | "compact";
+  feedback?: "up" | "down";
+  onFeedback?: (messageId: string, value: "up" | "down") => void;
 }) {
   const isAssistant = message.role === "assistant";
   const content = getMessageContent(message);
@@ -208,6 +222,7 @@ function MessageItem({
   const isLongMessage =
     content.length > 1200 || content.split(/\n/).length > 14;
   const isCompact = density === "compact";
+  const canFeedback = isAssistant && Boolean(onFeedback);
   const shouldHighlight =
     Boolean(highlightQuery) && (isMatch || isActiveMatch);
   const highlightedContent =
@@ -380,46 +395,88 @@ function MessageItem({
             ) : null}
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-            {isAssistant && metrics ? (
-              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                {metrics.ttftMs !== undefined ? (
-                  <span>首字 {formatDuration(metrics.ttftMs)}</span>
-                ) : null}
-                {metrics.totalMs !== undefined ? (
-                  <span>耗时 {formatDuration(metrics.totalMs)}</span>
-                ) : null}
-                {metrics.charCount !== undefined ? (
-                  <span>字数 {formatCount(metrics.charCount)}</span>
-                ) : null}
-              </div>
-            ) : (
-              <div />
-            )}
-            {isLongMessage ? (
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+              {isAssistant && metrics ? (
+                <>
+                  {metrics.ttftMs !== undefined ? (
+                    <span>首字 {formatDuration(metrics.ttftMs)}</span>
+                  ) : null}
+                  {metrics.totalMs !== undefined ? (
+                    <span>耗时 {formatDuration(metrics.totalMs)}</span>
+                  ) : null}
+                  {metrics.charCount !== undefined ? (
+                    <span>字数 {formatCount(metrics.charCount)}</span>
+                  ) : null}
+                </>
+              ) : null}
+              {canFeedback ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onFeedback?.(message.id, "up")}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition ${
+                      feedback === "up"
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/60 dark:bg-emerald-500/10 dark:text-emerald-200"
+                        : "border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+                    }`}
+                    aria-label="有帮助"
+                    title="有帮助"
+                  >
+                    {feedback === "up" ? (
+                      <ThumbUpAltIcon fontSize="inherit" />
+                    ) : (
+                      <ThumbUpAltOutlinedIcon fontSize="inherit" />
+                    )}
+                    有帮助
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onFeedback?.(message.id, "down")}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition ${
+                      feedback === "down"
+                        ? "border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-500/60 dark:bg-rose-500/10 dark:text-rose-200"
+                        : "border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+                    }`}
+                    aria-label="无帮助"
+                    title="无帮助"
+                  >
+                    {feedback === "down" ? (
+                      <ThumbDownAltIcon fontSize="inherit" />
+                    ) : (
+                      <ThumbDownAltOutlinedIcon fontSize="inherit" />
+                    )}
+                    无帮助
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              {isLongMessage ? (
+                <button
+                  type="button"
+                  onClick={() => setIsExpanded((prev) => !prev)}
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus:opacity-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  {isExpanded ? "收起" : "展开"}
+                </button>
+              ) : null}
+              {!isAssistant && onEditMessage ? (
+                <button
+                  type="button"
+                  onClick={() => onEditMessage(message)}
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus:opacity-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  编辑
+                </button>
+              ) : null}
               <button
                 type="button"
-                onClick={() => setIsExpanded((prev) => !prev)}
+                onClick={handleCopy}
                 className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus:opacity-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
               >
-                {isExpanded ? "收起" : "展开"}
+                {copied ? "已复制" : "复制文本"}
               </button>
-            ) : null}
-            {!isAssistant && onEditMessage ? (
-              <button
-                type="button"
-                onClick={() => onEditMessage(message)}
-                className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus:opacity-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                编辑
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus:opacity-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              {copied ? "已复制" : "复制文本"}
-            </button>
+            </div>
           </div>
         </div>
       </div>

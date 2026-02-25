@@ -44,6 +44,7 @@ import { useMessageSearch } from "@/lib/useMessageSearch";
 const MAX_DRAFT_PERSIST_RETRIES = 3;
 const DRAFT_PERSIST_RETRY_DELAY_MS = 1500;
 const DENSITY_STORAGE_KEY = "deepscan:ui-density";
+const FEEDBACK_STORAGE_PREFIX = "deepscan:chat-feedback:";
 const QUICK_PROMPTS = [
   {
     title: "会议纪要",
@@ -109,6 +110,9 @@ function ChatSession({
     const stored = localStorage.getItem(DENSITY_STORAGE_KEY);
     return stored === "compact" ? "compact" : "comfort";
   });
+  const [messageFeedback, setMessageFeedback] = useState<
+    Record<string, "up" | "down">
+  >({});
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const hasAutoSentInitialRef = useRef(false);
   const draftPersistStateRef = useRef<"idle" | "pending" | "done">("idle");
@@ -260,6 +264,33 @@ function ChatSession({
       JSON.stringify(messages ?? [])
     );
   }, [sessionId, messages]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(`${FEEDBACK_STORAGE_PREFIX}${sessionId}`);
+      if (!raw) {
+        setMessageFeedback({});
+        return;
+      }
+      const parsed = JSON.parse(raw) as Record<string, "up" | "down">;
+      if (parsed && typeof parsed === "object") {
+        setMessageFeedback(parsed);
+      } else {
+        setMessageFeedback({});
+      }
+    } catch {
+      setMessageFeedback({});
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(
+      `${FEEDBACK_STORAGE_PREFIX}${sessionId}`,
+      JSON.stringify(messageFeedback)
+    );
+  }, [messageFeedback, sessionId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -435,6 +466,16 @@ function ChatSession({
       inputRef.current?.focus();
     });
   };
+  const handleFeedback = (messageId: string, value: "up" | "down") => {
+    setMessageFeedback((prev) => {
+      const current = prev[messageId];
+      if (current === value) {
+        const { [messageId]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [messageId]: value };
+    });
+  };
   const handleToggleDensity = () => {
     setDensity((prev) => (prev === "compact" ? "comfort" : "compact"));
   };
@@ -516,6 +557,8 @@ function ChatSession({
               messageMetrics={messageMetrics}
               highlightQuery={normalizedSearchQuery}
               density={density}
+              messageFeedback={messageFeedback}
+              onFeedback={handleFeedback}
             />
           )}
           {isLoading && (
