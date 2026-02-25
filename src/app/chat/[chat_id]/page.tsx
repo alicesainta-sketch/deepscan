@@ -133,6 +133,7 @@ function ChatSession({
   const endRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
   const messageCount = messages?.length ?? 0;
   const isEditing = Boolean(editTarget);
   const {
@@ -234,6 +235,16 @@ function ChatSession({
       const distanceToBottom =
         container.scrollHeight - container.scrollTop - container.clientHeight;
       setShowScrollToBottom(distanceToBottom > 160);
+      const maxScroll = container.scrollHeight - container.clientHeight;
+      if (maxScroll <= 0) {
+        setScrollProgress(100);
+        return;
+      }
+      const progress = Math.min(
+        100,
+        Math.max(0, (container.scrollTop / maxScroll) * 100)
+      );
+      setScrollProgress(progress);
     };
     handleScroll();
     container.addEventListener("scroll", handleScroll, { passive: true });
@@ -446,7 +457,14 @@ function ChatSession({
         >
           {error && <ErrorDisplay error={error} onDismiss={clearError} />}
           {persistError ? <ErrorDisplay error={persistError} /> : null}
-          <div className="sticky top-0 z-10 -mx-4 border-b border-slate-200/60 bg-slate-50/80 px-4 py-2 backdrop-blur dark:border-slate-700/60 dark:bg-slate-900/80 md:-mx-6 md:px-6">
+          <div className="sticky top-0 z-10 -mx-4 border-b border-slate-200/60 bg-slate-50/80 px-4 py-2 backdrop-blur dark:border-slate-700/60 dark:bg-slate-900/80 md:-mx-6 md:px-6 relative">
+            <div className="absolute inset-x-0 top-0 h-0.5 bg-slate-200/70 dark:bg-slate-700/70">
+              <div
+                className="h-full bg-blue-500 transition-[width]"
+                style={{ width: `${scrollProgress}%` }}
+                aria-hidden
+              />
+            </div>
             <div className="flex flex-col gap-2">
               <ChatMessageSearchBar
                 query={searchQuery}
