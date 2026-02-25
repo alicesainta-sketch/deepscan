@@ -476,6 +476,7 @@ function ChatSession({
               highlightedMessageIds={searchMatchIdSet}
               activeMessageId={activeMatchId}
               messageMetrics={messageMetrics}
+              highlightQuery={normalizedSearchQuery}
             />
           )}
           {isLoading && (

@@ -14,6 +14,7 @@ interface MessageListProps {
   highlightedMessageIds?: Set<string>;
   activeMessageId?: string | null;
   messageMetrics?: Record<string, MessageMetrics>;
+  highlightQuery?: string;
 }
 
 export type MessageMetrics = {
@@ -26,6 +27,40 @@ function getMessageContent(message: UIMessage): string {
   return message.parts
     .map((part) => (part.type === "text" ? part.text : ""))
     .join("");
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightText(text: string, query: string) {
+  if (!query) return text;
+  const escaped = escapeRegExp(query);
+  if (!escaped) return text;
+  const regex = new RegExp(escaped, "gi");
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (start > lastIndex) {
+      nodes.push(text.slice(lastIndex, start));
+    }
+    nodes.push(
+      <span
+        key={`${start}-${end}`}
+        className="rounded bg-amber-200/70 px-0.5 text-slate-900 dark:bg-amber-400/30 dark:text-amber-100"
+      >
+        {text.slice(start, end)}
+      </span>
+    );
+    lastIndex = end;
+  }
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+  return nodes.length > 0 ? nodes : text;
 }
 
 function formatDuration(ms?: number) {
@@ -121,6 +156,7 @@ export default function MessageList({
   highlightedMessageIds,
   activeMessageId,
   messageMetrics,
+  highlightQuery,
 }: MessageListProps) {
   return (
     <div className="flex flex-col gap-6">
@@ -133,6 +169,7 @@ export default function MessageList({
           isMatch={highlightedMessageIds?.has(message.id) ?? false}
           isActiveMatch={activeMessageId === message.id}
           metrics={messageMetrics?.[message.id]}
+          highlightQuery={highlightQuery}
         />
       ))}
     </div>
@@ -146,6 +183,7 @@ function MessageItem({
   isMatch,
   isActiveMatch,
   metrics,
+  highlightQuery,
 }: {
   message: UIMessage;
   onEditMessage?: (message: UIMessage) => void;
@@ -153,6 +191,7 @@ function MessageItem({
   isMatch: boolean;
   isActiveMatch: boolean;
   metrics?: MessageMetrics;
+  highlightQuery?: string;
 }) {
   const isAssistant = message.role === "assistant";
   const content = getMessageContent(message);
@@ -162,6 +201,12 @@ function MessageItem({
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongMessage =
     content.length > 1200 || content.split(/\n/).length > 14;
+  const shouldHighlight =
+    Boolean(highlightQuery) && (isMatch || isActiveMatch);
+  const highlightedContent =
+    shouldHighlight && highlightQuery
+      ? highlightText(content, highlightQuery)
+      : content;
 
   useEffect(() => {
     return () => {
@@ -251,6 +296,18 @@ function MessageItem({
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
+                    text({ children }: { children?: React.ReactNode }) {
+                      if (!shouldHighlight || !highlightQuery) {
+                        return <>{children}</>;
+                      }
+                      const raw =
+                        typeof children === "string"
+                          ? children
+                          : Array.isArray(children)
+                            ? children.join("")
+                            : "";
+                      return <>{highlightText(raw, highlightQuery)}</>;
+                    },
                     code({
                       inline,
                       className,
@@ -292,7 +349,9 @@ function MessageItem({
                   {content}
                 </ReactMarkdown>
               ) : (
-                <div className="whitespace-pre-wrap text-sm">{content}</div>
+                <div className="whitespace-pre-wrap text-sm">
+                  {highlightedContent}
+                </div>
               )}
             </div>
             {isLongMessage && !isExpanded ? (
