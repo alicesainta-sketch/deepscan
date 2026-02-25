@@ -13,12 +13,30 @@ interface MessageListProps {
   editingMessageId?: string | null;
   highlightedMessageIds?: Set<string>;
   activeMessageId?: string | null;
+  messageMetrics?: Record<string, MessageMetrics>;
 }
+
+export type MessageMetrics = {
+  ttftMs?: number;
+  totalMs?: number;
+  charCount?: number;
+};
 
 function getMessageContent(message: UIMessage): string {
   return message.parts
     .map((part) => (part.type === "text" ? part.text : ""))
     .join("");
+}
+
+function formatDuration(ms?: number) {
+  if (ms === undefined) return "";
+  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${Math.round(ms)}ms`;
+}
+
+function formatCount(value?: number) {
+  if (value === undefined) return "";
+  return value.toLocaleString();
 }
 
 function CodeBlock({
@@ -102,6 +120,7 @@ export default function MessageList({
   editingMessageId,
   highlightedMessageIds,
   activeMessageId,
+  messageMetrics,
 }: MessageListProps) {
   return (
     <div className="flex flex-col gap-6">
@@ -113,6 +132,7 @@ export default function MessageList({
           isEditing={editingMessageId === message.id}
           isMatch={highlightedMessageIds?.has(message.id) ?? false}
           isActiveMatch={activeMessageId === message.id}
+          metrics={messageMetrics?.[message.id]}
         />
       ))}
     </div>
@@ -125,12 +145,14 @@ function MessageItem({
   isEditing,
   isMatch,
   isActiveMatch,
+  metrics,
 }: {
   message: UIMessage;
   onEditMessage?: (message: UIMessage) => void;
   isEditing: boolean;
   isMatch: boolean;
   isActiveMatch: boolean;
+  metrics?: MessageMetrics;
 }) {
   const isAssistant = message.role === "assistant";
   const content = getMessageContent(message);
@@ -262,7 +284,22 @@ function MessageItem({
             />
           ) : null}
         </div>
-        <div className="mt-2 flex justify-end gap-2">
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          {isAssistant && metrics ? (
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+              {metrics.ttftMs !== undefined ? (
+                <span>首字 {formatDuration(metrics.ttftMs)}</span>
+              ) : null}
+              {metrics.totalMs !== undefined ? (
+                <span>耗时 {formatDuration(metrics.totalMs)}</span>
+              ) : null}
+              {metrics.charCount !== undefined ? (
+                <span>字数 {formatCount(metrics.charCount)}</span>
+              ) : null}
+            </div>
+          ) : (
+            <div />
+          )}
           {isLongMessage ? (
             <button
               type="button"

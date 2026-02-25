@@ -70,6 +70,9 @@ function ChatSession({
     id: string;
     previousInput: string;
   } | null>(null);
+  const [messageMetrics, setMessageMetrics] = useState<
+    Record<string, { ttftMs?: number; totalMs?: number; charCount?: number }>
+  >({});
   const [providerConfig, setProviderConfig] = useState(() =>
     loadChatProviderConfig()
   );
@@ -78,6 +81,10 @@ function ChatSession({
   const draftPersistStateRef = useRef<"idle" | "pending" | "done">("idle");
   const persistRetryCountRef = useRef(0);
   const persistRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestStartRef = useRef<number | null>(null);
+  const firstTokenAtRef = useRef<number | null>(null);
+  const activeAssistantIdRef = useRef<string | null>(null);
+  const knownMessageIdsRef = useRef<Set<string>>(new Set());
 
   const chatTransport = useMemo(() => createChatTransport(), []);
 
@@ -118,6 +125,68 @@ function ChatSession({
     }
     return null;
   }, [messages]);
+
+  useEffect(() => {
+    if (isLoading && requestStartRef.current === null) {
+      requestStartRef.current = Date.now();
+      firstTokenAtRef.current = null;
+      activeAssistantIdRef.current = null;
+      knownMessageIdsRef.current = new Set((messages ?? []).map((msg) => msg.id));
+    }
+
+    if (!isLoading && requestStartRef.current !== null) {
+      const activeId = activeAssistantIdRef.current;
+      if (activeId) {
+        const message = (messages ?? []).find((msg) => msg.id === activeId);
+        if (message) {
+          const text = getMessageText(message);
+          const totalMs = Date.now() - requestStartRef.current;
+          setMessageMetrics((prev) => ({
+            ...prev,
+            [activeId]: {
+              ...prev[activeId],
+              totalMs,
+              charCount: text.length,
+            },
+          }));
+        }
+      }
+      requestStartRef.current = null;
+      firstTokenAtRef.current = null;
+      activeAssistantIdRef.current = null;
+    }
+  }, [isLoading, messages]);
+
+  useEffect(() => {
+    if (!isLoading || !requestStartRef.current) return;
+
+    if (!activeAssistantIdRef.current) {
+      const nextAssistant = (messages ?? []).find(
+        (msg) =>
+          msg.role === "assistant" && !knownMessageIdsRef.current.has(msg.id)
+      );
+      if (nextAssistant) {
+        activeAssistantIdRef.current = nextAssistant.id;
+      }
+    }
+
+    const activeId = activeAssistantIdRef.current;
+    if (!activeId || firstTokenAtRef.current !== null) return;
+    const activeMessage = (messages ?? []).find((msg) => msg.id === activeId);
+    if (!activeMessage) return;
+    if (getMessageText(activeMessage).length === 0) return;
+
+    const now = Date.now();
+    firstTokenAtRef.current = now;
+    const ttftMs = now - requestStartRef.current;
+    setMessageMetrics((prev) => ({
+      ...prev,
+      [activeId]: {
+        ...prev[activeId],
+        ttftMs,
+      },
+    }));
+  }, [isLoading, messages]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -332,6 +401,7 @@ function ChatSession({
               editingMessageId={editTarget?.id ?? null}
               highlightedMessageIds={searchMatchIdSet}
               activeMessageId={activeMatchId}
+              messageMetrics={messageMetrics}
             />
           )}
           {isLoading && (
