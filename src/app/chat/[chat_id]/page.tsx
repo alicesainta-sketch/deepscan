@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import ChatHeader from "@/app/components/ChatHeader";
+import ChatInsightsBar from "@/app/components/ChatInsightsBar";
 import ChatMessageSearchBar from "@/app/components/ChatMessageSearchBar";
 import ChatProviderSettingsModal from "@/app/components/ChatProviderSettingsModal";
 import ErrorDisplay from "@/app/components/ErrorDisplay";
@@ -42,6 +43,31 @@ import { useMessageSearch } from "@/lib/useMessageSearch";
 
 const MAX_DRAFT_PERSIST_RETRIES = 3;
 const DRAFT_PERSIST_RETRY_DELAY_MS = 1500;
+const QUICK_PROMPTS = [
+  {
+    title: "会议纪要",
+    description: "把要点整理成结构化纪要",
+    prompt: "请把下面会议内容整理成结构化纪要：\n- 目标：\n- 进展：\n- 风险：\n- 下一步：",
+  },
+  {
+    title: "竞品分析",
+    description: "快速对比优劣与机会点",
+    prompt:
+      "请对比以下产品，输出表格并给出差异化机会：\n产品A：\n产品B：\n维度：功能、价格、体验、渠道",
+  },
+  {
+    title: "代码审查",
+    description: "列出风险与改进建议",
+    prompt:
+      "请做一次代码审查，输出严重级别、问题点与建议修复：\n```\n<粘贴代码>\n```",
+  },
+  {
+    title: "方案拆解",
+    description: "按里程碑拆解落地路径",
+    prompt:
+      "请将以下需求拆解为里程碑、关键任务与验收标准：\n需求：",
+  },
+];
 
 function ChatSession({
   routeChatId,
@@ -77,6 +103,7 @@ function ChatSession({
     loadChatProviderConfig()
   );
   const [isProviderSettingsOpen, setIsProviderSettingsOpen] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const hasAutoSentInitialRef = useRef(false);
   const draftPersistStateRef = useRef<"idle" | "pending" | "done">("idle");
   const persistRetryCountRef = useRef(0);
@@ -365,6 +392,12 @@ function ChatSession({
   const providerLabel =
     providerConfig.label ??
     (providerConfig.mode === "openai-compatible" ? "direct" : "server");
+  const handleQuickPrompt = (prompt: string) => {
+    setInput(prompt);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  };
 
   return (
     <div className="flex h-screen flex-col bg-slate-50 dark:bg-slate-900">
@@ -389,10 +422,33 @@ function ChatSession({
             onClear={clearSearch}
             hasQuery={Boolean(normalizedSearchQuery)}
           />
+          <ChatInsightsBar messages={messages ?? []} isLoading={isLoading} />
           {messages?.length === 0 && !error ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 text-gray-500 dark:text-slate-400">
               <p className="text-sm">开始新对话</p>
               <p className="text-xs">发送一条消息与 AI 助手聊天</p>
+              <div className="mt-4 w-full max-w-2xl">
+                <p className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                  快速开始
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {QUICK_PROMPTS.map((item) => (
+                    <button
+                      key={item.title}
+                      type="button"
+                      onClick={() => handleQuickPrompt(item.prompt)}
+                      className="group rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600 dark:hover:bg-slate-800/70"
+                    >
+                      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                        {item.title}
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        {item.description}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : (
             <MessageList
@@ -449,6 +505,7 @@ function ChatSession({
             isLoading={isLoading}
             onStop={stop}
             placeholder={isEditing ? "编辑后按 Enter 重新发送…" : "输入消息…"}
+            textareaRef={inputRef}
           />
         </div>
       </div>

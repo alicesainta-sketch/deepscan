@@ -11,6 +11,7 @@ interface InputFieldProps {
   isLoading: boolean;
   onStop?: () => void;
   placeholder?: string;
+  textareaRef?: React.Ref<HTMLTextAreaElement>;
 }
 
 export default function InputField({
@@ -20,6 +21,7 @@ export default function InputField({
   isLoading,
   onStop,
   placeholder = "输入消息…",
+  textareaRef,
 }: InputFieldProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -34,6 +36,7 @@ export default function InputField({
       className="flex flex-col rounded-lg border border-gray-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
     >
       <textarea
+        ref={textareaRef}
         className="w-full resize-none rounded-t-lg p-3 text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-blue-400"
         rows={3}
         value={input}
