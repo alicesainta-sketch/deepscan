@@ -1,4 +1,10 @@
+import type { UIMessage } from "ai";
 import type { ChatModel } from "@/types/chat";
+import {
+  readStoredMessages,
+  removeStoredMessages,
+  writeStoredMessages,
+} from "@/lib/chatMessageStorage";
 
 const CHAT_STORE_KEY = "deepscan:chat-store";
 const LEGACY_CHAT_STORE_KEY = "deepscan:chat-store:v1";
@@ -16,6 +22,7 @@ export type ChatExportPayload = {
   scope: string;
   exportedAt: number;
   chats: ChatModel[];
+  messagesByChatId?: Record<string, UIMessage[]>;
 };
 
 const getDefaultState = (): ChatStoreState => ({
@@ -181,6 +188,7 @@ export const updateLocalChat = async (
   payload: {
     title?: string;
     pinned?: boolean;
+    model?: "deepseek-v3" | "deepseek-r1";
   }
 ) => {
   const store = readStore();
@@ -197,6 +205,10 @@ export const updateLocalChat = async (
     ...chat,
     title: nextTitle,
     pinned: typeof payload.pinned === "boolean" ? payload.pinned : chat.pinned,
+    model:
+      payload.model === "deepseek-r1" || payload.model === "deepseek-v3"
+        ? payload.model
+        : chat.model,
     updatedAt: Date.now(),
   };
 
@@ -219,14 +231,26 @@ export const deleteLocalChat = async (scope: string, chatId: number) => {
   return true;
 };
 
-export const exportLocalChats = async (scope: string): Promise<ChatExportPayload> => {
+export const exportLocalChats = async (
+  scope: string
+): Promise<ChatExportPayload> => {
   const chats = await listChats(scope);
+  // Export messages alongside chat metadata for complete backup/restore.
+  const messagesByChatId: Record<string, UIMessage[]> = {};
+  chats.forEach((chat) => {
+    const messages = readStoredMessages(String(chat.id));
+    if (messages.length > 0) {
+      messagesByChatId[String(chat.id)] = messages;
+    }
+  });
+
   return {
     kind: "deepscan-chat-export",
     version: CHAT_STORE_VERSION,
     scope,
     exportedAt: Date.now(),
     chats,
+    messagesByChatId,
   };
 };
 
@@ -242,6 +266,7 @@ export const importLocalChats = async (
   const candidate = payload as {
     kind?: unknown;
     chats?: unknown;
+    messagesByChatId?: unknown;
   };
 
   if (candidate.kind !== "deepscan-chat-export") {
@@ -252,15 +277,26 @@ export const importLocalChats = async (
   }
 
   const store = readStore();
+  if (mode === "replace") {
+    // Replace mode should also clear existing message shards for this scope.
+    (store.chatsByScope[scope] ?? []).forEach((chat) => {
+      removeStoredMessages(String(chat.id));
+    });
+  }
   const importedChats = candidate.chats.map((rawChat, index) =>
     normalizeChat(rawChat as Partial<ChatModel>, index + 1)
   );
 
-  const withFreshIds = importedChats.map((chat) => ({
-    ...chat,
-    id: store.nextChatId++,
-    userId: scope,
-  }));
+  const idMap = new Map<number, number>();
+  const withFreshIds = importedChats.map((chat) => {
+    const nextId = store.nextChatId++;
+    idMap.set(chat.id, nextId);
+    return {
+      ...chat,
+      id: nextId,
+      userId: scope,
+    };
+  });
 
   const currentChats = store.chatsByScope[scope] ?? [];
   const nextChats =
@@ -268,6 +304,18 @@ export const importLocalChats = async (
 
   store.chatsByScope[scope] = sortChats(nextChats);
   writeStore(store);
+
+  if (candidate.messagesByChatId && typeof candidate.messagesByChatId === "object") {
+    // Map messages from old chat ids to new ids after import.
+    Object.entries(candidate.messagesByChatId as Record<string, unknown>).forEach(
+      ([rawChatId, rawMessages]) => {
+        const oldId = Number(rawChatId);
+        const newId = idMap.get(oldId);
+        if (!newId || !Array.isArray(rawMessages)) return;
+        writeStoredMessages(String(newId), rawMessages as UIMessage[]);
+      }
+    );
+  }
 
   return {
     importedCount: withFreshIds.length,

@@ -13,9 +13,15 @@ const getDeepseekClient = (apiKey: string, baseURL: string) =>
   });
 
 export async function POST(req: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const clerkEnabled = Boolean(
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY
+  );
+  // Only enforce login when Clerk is configured; otherwise allow guest access.
+  if (clerkEnabled) {
+    const { userId } = await auth();
+    if (!userId) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   const apiKey = process.env.DEEPSEEK_API_KEY;

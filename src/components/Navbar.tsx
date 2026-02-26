@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import React from "react";
+import type { UIMessage } from "ai";
 import {
   deleteLocalChat,
   exportLocalChats,
@@ -266,9 +267,19 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     if (targets.length === 0) return;
     void runBulkAction(async () => {
       const payload = await exportLocalChats(chatScope);
+      const selectedIdSet = new Set(targets.map((chat) => String(chat.id)));
+      const selectedMessages: Record<string, UIMessage[]> = {};
+      Object.entries(payload.messagesByChatId ?? {}).forEach(
+        ([chatId, messages]) => {
+          if (selectedIdSet.has(chatId)) {
+            selectedMessages[chatId] = messages;
+          }
+        }
+      );
       const selectedPayload = {
         ...payload,
         chats: targets,
+        messagesByChatId: selectedMessages,
       };
       downloadExportPayload(selectedPayload, getExportFilename("selected"));
     }, `已导出 ${targets.length} 个会话`);

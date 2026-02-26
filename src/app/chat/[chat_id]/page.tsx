@@ -35,7 +35,7 @@ import {
   getChatMessagesStorageKey,
   readStoredMessages,
 } from "@/lib/chatMessageStorage";
-import { createLocalChat, getChatScope } from "@/lib/chatStore";
+import { createLocalChat, getChatScope, updateLocalChat } from "@/lib/chatStore";
 import { useHydrated } from "@/lib/useHydrated";
 import { useMessageSearch } from "@/lib/useMessageSearch";
 
@@ -398,7 +398,16 @@ function ChatSession({
   ]);
 
   const handleChangeModel = () => {
-    setModel(model === "deepseek-v3" ? "deepseek-r1" : "deepseek-v3");
+    const nextModel = model === "deepseek-v3" ? "deepseek-r1" : "deepseek-v3";
+    setModel(nextModel);
+    // Keep sidebar metadata in sync for non-draft sessions.
+    if (!isDraftSession) {
+      const numericChatId = Number(routeChatId);
+      if (Number.isFinite(numericChatId)) {
+        void updateLocalChat(chatScope, numericChatId, { model: nextModel });
+        void queryClient.invalidateQueries({ queryKey: ["chats", chatScope] });
+      }
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
