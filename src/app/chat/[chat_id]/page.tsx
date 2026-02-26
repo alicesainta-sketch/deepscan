@@ -36,6 +36,8 @@ import {
   getStepByTitle,
   startDraftingStep,
   summarizeAssistantResponse,
+  updateAgentRunStep,
+  validateAgentOutput,
 } from "@/lib/agentRuntime";
 import {
   clearAgentRuns,
@@ -598,13 +600,31 @@ function ChatSession({
     );
     if (!assistantMessage) return;
 
-    const summary = summarizeAssistantResponse(getMessageText(assistantMessage));
+    const responseText = getMessageText(assistantMessage);
+    const validationStep = getStepByTitle(targetRun, "结果验收");
+    // Validate structured output to expose missing fields in the Agent panel.
+    const validation = validateAgentOutput(responseText);
+    const fallbackSummary = summarizeAssistantResponse(responseText);
+    const summary =
+      validation.ok ? validation.summary : fallbackSummary || validation.summary;
+
     let nextRun = finishDraftingStep(
       targetRun,
       draftStepId,
       summary || "已生成方案"
     );
-    nextRun = finalizeAgentRun(nextRun, "success");
+
+    if (validationStep) {
+      nextRun = updateAgentRunStep(nextRun, validationStep.id, {
+        status: validation.ok ? "success" : "failed",
+        endedAt: Date.now(),
+        outputSummary: validation.ok ? "结构化输出通过" : "结构化校验失败",
+        details: validation.details,
+        error: validation.ok ? undefined : validation.issues.join("；"),
+      });
+    }
+
+    nextRun = finalizeAgentRun(nextRun, validation.ok ? "success" : "failed");
     updateAgentRun(pendingRunId, nextRun);
     pendingAgentRunIdRef.current = null;
     pendingAgentDraftStepIdRef.current = null;

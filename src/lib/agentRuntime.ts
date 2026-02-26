@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { AgentRun, AgentStep, AgentStepDetail } from "@/types/agent";
 import type { KnowledgeDocument, KnowledgeSearchResult } from "@/types/knowledge";
 import type { AgentSettings } from "@/lib/agentSettings";
@@ -33,6 +34,96 @@ const createStep = (partial: Partial<AgentStep> & { title: string }) => {
   } as AgentStep;
 };
 
+const agentOutputSchema = z.object({
+  summary: z.array(z.string().min(1)).min(1),
+  changes: z.array(z.string().min(1)).min(1),
+  risks: z.array(z.string().min(1)).min(1),
+  tests: z.array(z.string().min(1)).min(1),
+});
+
+type AgentOutput = z.infer<typeof agentOutputSchema>;
+
+// Extract JSON from plain text or fenced code blocks for resilient parsing.
+const extractJsonFromText = (content: string) => {
+  const fencedMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fencedMatch?.[1]) return fencedMatch[1].trim();
+
+  const start = content.indexOf("{");
+  const end = content.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    return content.slice(start, end + 1).trim();
+  }
+
+  return "";
+};
+
+const buildValidationDetails = (data: AgentOutput): AgentStepDetail[] => [
+  { title: "变更摘要", content: `共 ${data.summary.length} 条` },
+  { title: "文件改动清单", content: `共 ${data.changes.length} 条` },
+  { title: "风险", content: `共 ${data.risks.length} 条` },
+  { title: "测试建议", content: `共 ${data.tests.length} 条` },
+];
+
+const formatIssues = (issues: z.ZodIssue[]) =>
+  issues.map((issue) => {
+    const path = issue.path.join(".") || "root";
+    return `${path}: ${issue.message}`;
+  });
+
+// Validate structured output and produce summaries for the UI.
+export const validateAgentOutput = (content: string) => {
+  const raw = extractJsonFromText(content);
+  if (!raw) {
+    return {
+      ok: false,
+      summary: "未检测到可解析 JSON",
+      issues: ["未检测到 JSON 输出"],
+      details: [
+        {
+          title: "提示",
+          content: "请输出符合约定结构的 JSON。",
+        },
+      ],
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const result = agentOutputSchema.safeParse(parsed);
+    if (!result.success) {
+      return {
+        ok: false,
+        summary: "结构化校验未通过",
+        issues: formatIssues(result.error.issues),
+        details: result.error.issues.map((issue) => ({
+          title: "缺失/错误字段",
+          content: `${issue.path.join(".") || "root"}: ${issue.message}`,
+        })),
+      };
+    }
+
+    const summary = result.data.summary.join("；");
+    return {
+      ok: true,
+      summary: summary || "结构化输出通过",
+      issues: [],
+      details: buildValidationDetails(result.data),
+    };
+  } catch {
+    return {
+      ok: false,
+      summary: "JSON 解析失败",
+      issues: ["JSON 解析失败"],
+      details: [
+        {
+          title: "提示",
+          content: "请确认输出为合法 JSON，且包含 summary/changes/risks/tests。",
+        },
+      ],
+    };
+  }
+};
+
 // Initialize a run with stable step IDs so UI can track updates.
 export const createAgentRun = (params: {
   sessionId: string;
@@ -65,6 +156,11 @@ export const createAgentRun = (params: {
     toolName: "change_plan",
   });
 
+  const validationStep = createStep({
+    title: "结果验收",
+    status: "pending",
+  });
+
   return {
     id: createId(),
     sessionId: params.sessionId,
@@ -73,7 +169,7 @@ export const createAgentRun = (params: {
     status: "running",
     createdAt: now,
     updatedAt: now,
-    steps: [analysisStep, searchStep, draftingStep],
+    steps: [analysisStep, searchStep, draftingStep, validationStep],
   };
 };
 
@@ -207,8 +303,12 @@ export const buildAgentContext = (params: {
 
 export const buildAgentInstruction = (settings: AgentSettings) => {
   const answerStyle = formatAnswerStyle(settings.answerStyle);
-  return `你是前端代码助手（Agent 模式）。请基于上下文输出可执行改动方案。\n` +
-    `要求：输出“变更摘要 / 文件改动清单 / 风险 / 测试建议”，风格：${answerStyle}。`;
+  return (
+    `你是前端代码助手（Agent 模式）。请基于上下文输出可执行改动方案。\n` +
+    `要求：输出 JSON，字段为 summary/changes/risks/tests，均为字符串数组。\n` +
+    `示例：{"summary":["..."],"changes":["path: desc"],"risks":["..."],"tests":["..."]}。\n` +
+    `除 JSON 外不要输出任何解释文字，风格：${answerStyle}。`
+  );
 };
 
 export const getStepByTitle = (run: AgentRun, title: string) =>
