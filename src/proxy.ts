@@ -1,12 +1,21 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 const isPublicRoute = createRouteMatcher(["/sign-in(.*)"]);
+const isClerkEnabled = Boolean(
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY
+);
 
-export default clerkMiddleware(async (auth, req) => {
-  if (!isPublicRoute(req)) {
-    await auth.protect();
-  }
-});
+// Default to guest access when Clerk is not configured.
+const guestMiddleware = (_req: NextRequest) => NextResponse.next();
+
+export default isClerkEnabled
+  ? clerkMiddleware(async (auth, req) => {
+      if (!isPublicRoute(req)) {
+        await auth.protect();
+      }
+    })
+  : guestMiddleware;
 
 export const config = {
   matcher: [
