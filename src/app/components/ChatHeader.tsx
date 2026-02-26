@@ -9,6 +9,9 @@ interface ChatHeaderProps {
   providerLabel?: string;
   density?: "comfort" | "compact";
   onDensityToggle?: () => void;
+  agentEnabled?: boolean;
+  onAgentToggle?: () => void;
+  onOpenAgentPanel?: () => void;
 }
 
 export default function ChatHeader({
@@ -20,6 +23,9 @@ export default function ChatHeader({
   providerLabel,
   density = "comfort",
   onDensityToggle,
+  agentEnabled,
+  onAgentToggle,
+  onOpenAgentPanel,
 }: ChatHeaderProps) {
   return (
     <header className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
@@ -46,6 +52,19 @@ export default function ChatHeader({
         >
           {model === "deepseek-r1" ? "深度思考 R1" : "DeepSeek V3"}
         </button>
+        {onAgentToggle ? (
+          <button
+            type="button"
+            onClick={onAgentToggle}
+            className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
+              agentEnabled
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-700/60 dark:bg-emerald-900/30 dark:text-emerald-200"
+                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+            }`}
+          >
+            Agent
+          </button>
+        ) : null}
         {onDensityToggle ? (
           <button
             type="button"
@@ -55,6 +74,17 @@ export default function ChatHeader({
             title="切换消息密度"
           >
             {density === "compact" ? "紧凑" : "舒适"}
+          </button>
+        ) : null}
+        {onOpenAgentPanel ? (
+          <button
+            type="button"
+            onClick={onOpenAgentPanel}
+            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            aria-label="Agent 面板"
+            title="Agent 面板"
+          >
+            面板
           </button>
         ) : null}
         {onOpenSettings ? (

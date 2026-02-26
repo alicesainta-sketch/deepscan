@@ -1,5 +1,6 @@
 import { DefaultChatTransport } from "ai";
 import type { ChatTransport, UIMessage } from "ai";
+import type { AgentMessageMetadata } from "@/types/agent";
 import { getMessageText } from "@/lib/chatMessages";
 
 const PROVIDER_STORAGE_KEY = "deepscan:chat-provider:v1";
@@ -77,6 +78,26 @@ const normalizeHeaders = (headers?: HeadersInit) => {
   }
   return headers;
 };
+
+// Append agent-only context to transport messages without mutating UI state.
+const appendAgentContext = (message: UIMessage) => {
+  if (message.role !== "user") return message;
+  const metadata = message.metadata as AgentMessageMetadata | undefined;
+  const context = metadata?.agent?.context;
+  if (!context) return message;
+  const extraPart = {
+    type: "text",
+    text: `\n\n[Agent Context]\n${context}`,
+  } as UIMessage["parts"][number];
+  return {
+    ...message,
+    parts: [...message.parts, extraPart],
+  };
+};
+
+// Prepare messages for transport by injecting metadata-only context blocks.
+const prepareMessagesForTransport = (messages: UIMessage[]) =>
+  messages.map((message) => appendAgentContext(message));
 
 export const loadChatProviderConfig = (): ChatProviderConfig => {
   if (typeof window === "undefined") return DEFAULT_CHAT_PROVIDER_CONFIG;
@@ -157,7 +178,7 @@ class OpenAICompatibleChatTransport implements ChatTransport<UIMessage> {
         (options.body as { model?: string } | undefined)?.model ??
         "deepseek-v3",
       messages: toOpenAICompatibleMessages(
-        options.messages,
+        prepareMessagesForTransport(options.messages),
         this.config.systemPrompt
       ),
       stream: true,
@@ -302,7 +323,14 @@ class LocalStorageChatTransport implements ChatTransport<UIMessage> {
             api: config.apiUrl,
             headers: buildHeaders(config),
           });
-    return transport.sendMessages(options);
+    const preparedOptions =
+      config.mode === "openai-compatible"
+        ? options
+        : {
+            ...options,
+            messages: prepareMessagesForTransport(options.messages),
+          };
+    return transport.sendMessages(preparedOptions);
   }
 
   async reconnectToStream(

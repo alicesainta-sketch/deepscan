@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
+import AgentPanel from "@/app/components/AgentPanel";
 import ChatHeader from "@/app/components/ChatHeader";
 import ChatInsightsBar from "@/app/components/ChatInsightsBar";
 import ChatMessageSearchBar from "@/app/components/ChatMessageSearchBar";
@@ -20,6 +21,27 @@ import InputField from "@/app/components/InputField";
 import LoadingIndicator from "@/app/components/LoadingIndicator";
 import MessageList from "@/app/components/MessageList";
 import SearchIcon from "@mui/icons-material/Search";
+import type { AgentMessageMetadata, AgentRun } from "@/types/agent";
+import type { KnowledgeDocument, KnowledgeSearchResult } from "@/types/knowledge";
+import { loadAgentSettings, saveAgentSettings } from "@/lib/agentSettings";
+import {
+  buildAgentContext,
+  buildAgentInstruction,
+  createAgentRun,
+  attachSearchFailure,
+  attachSearchResults,
+  failDraftingStep,
+  finalizeAgentRun,
+  finishDraftingStep,
+  getStepByTitle,
+  startDraftingStep,
+  summarizeAssistantResponse,
+} from "@/lib/agentRuntime";
+import {
+  clearAgentRuns,
+  loadAgentRuns,
+  saveAgentRuns,
+} from "@/lib/agentRunStore";
 import {
   createChatTransport,
   type ChatProviderConfig,
@@ -37,6 +59,13 @@ import {
   readStoredMessages,
 } from "@/lib/chatMessageStorage";
 import { createLocalChat, getChatScope, updateLocalChat } from "@/lib/chatStore";
+import {
+  createKnowledgeDocumentsFromFiles,
+  deleteKnowledgeDocument,
+  loadKnowledgeDocuments,
+  searchKnowledgeDocuments,
+  upsertKnowledgeDocuments,
+} from "@/lib/knowledgeBase";
 import { useHydrated } from "@/lib/useHydrated";
 import { useMessageSearch } from "@/lib/useMessageSearch";
 
@@ -106,6 +135,13 @@ function ChatSession({
     loadChatProviderConfig()
   );
   const [isProviderSettingsOpen, setIsProviderSettingsOpen] = useState(false);
+  const [agentSettings, setAgentSettings] = useState(() =>
+    loadAgentSettings()
+  );
+  const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false);
+  const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
+  const [activeAgentRunId, setActiveAgentRunId] = useState<string | null>(null);
+  const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>([]);
   const [density, setDensity] = useState<"comfort" | "compact">(() => {
     if (typeof window === "undefined") return "comfort";
     const stored = localStorage.getItem(DENSITY_STORAGE_KEY);
@@ -123,6 +159,8 @@ function ChatSession({
   const firstTokenAtRef = useRef<number | null>(null);
   const activeAssistantIdRef = useRef<string | null>(null);
   const knownMessageIdsRef = useRef<Set<string>>(new Set());
+  const pendingAgentRunIdRef = useRef<string | null>(null);
+  const pendingAgentDraftStepIdRef = useRef<string | null>(null);
 
   const chatTransport = useMemo(() => createChatTransport(), []);
 
@@ -306,6 +344,39 @@ function ChatSession({
   }, [density]);
 
   useEffect(() => {
+    saveAgentSettings(agentSettings);
+  }, [agentSettings]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadDocuments = async () => {
+      const docs = await loadKnowledgeDocuments();
+      if (isActive) {
+        setKnowledgeDocs(docs);
+      }
+    };
+
+    void loadDocuments();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const storedRuns = loadAgentRuns(sessionId);
+    setAgentRuns(storedRuns);
+    setActiveAgentRunId(storedRuns[0]?.id ?? null);
+    pendingAgentRunIdRef.current = null;
+    pendingAgentDraftStepIdRef.current = null;
+  }, [sessionId]);
+
+  useEffect(() => {
+    saveAgentRuns(sessionId, agentRuns);
+  }, [agentRuns, sessionId]);
+
+  useEffect(() => {
     if (!isDraftSession) return;
     if (!initialPrompt?.trim()) return;
     if (hasAutoSentInitialRef.current) return;
@@ -362,6 +433,12 @@ function ChatSession({
             JSON.stringify(messages ?? [])
           );
           localStorage.removeItem(getChatMessagesStorageKey(sessionId));
+          // Move draft agent runs along with the chat history.
+          const draftRuns = loadAgentRuns(sessionId);
+          if (draftRuns.length > 0) {
+            saveAgentRuns(newSessionId, draftRuns);
+            clearAgentRuns(sessionId);
+          }
         }
 
         await queryClient.invalidateQueries({ queryKey: ["chats", chatScope] });
@@ -405,6 +482,140 @@ function ChatSession({
     sessionId,
   ]);
 
+  // Update a single agent run without reordering the list.
+  const updateAgentRun = (runId: string, nextRun: AgentRun) => {
+    setAgentRuns((prev) =>
+      prev.some((run) => run.id === runId)
+        ? prev.map((run) => (run.id === runId ? nextRun : run))
+        : [nextRun, ...prev]
+    );
+  };
+
+  const handleToggleAgent = () => {
+    setAgentSettings((prev) => ({
+      ...prev,
+      enabled: !prev.enabled,
+    }));
+  };
+
+  // Import local code files into the knowledge base (pure client-side).
+  const handleImportAgentFiles = async (files: FileList) => {
+    const docs = await createKnowledgeDocumentsFromFiles(files);
+    if (docs.length === 0) return;
+    const merged = await upsertKnowledgeDocuments(docs);
+    setKnowledgeDocs(merged);
+  };
+
+  const handleRemoveAgentDocument = async (id: string) => {
+    await deleteKnowledgeDocument(id);
+    setKnowledgeDocs((prev) => prev.filter((doc) => doc.id !== id));
+  };
+
+  const handleClearAgentRuns = () => {
+    clearAgentRuns(sessionId);
+    setAgentRuns([]);
+    setActiveAgentRunId(null);
+  };
+
+  const handleAgentSubmit = async (prompt: string) => {
+    // Agent 模式下：先创建运行记录，再拼接上下文发送给模型。
+    const run = createAgentRun({
+      sessionId,
+      prompt,
+      settings: agentSettings,
+    });
+    const searchStep = getStepByTitle(run, "本地代码检索");
+    const draftingStep = getStepByTitle(run, "生成修改方案");
+
+    if (!searchStep || !draftingStep) {
+      return;
+    }
+
+    pendingAgentRunIdRef.current = run.id;
+    pendingAgentDraftStepIdRef.current = draftingStep.id;
+
+    setAgentRuns((prev) => [run, ...prev]);
+    setActiveAgentRunId(run.id);
+
+    let nextRun = run;
+    let searchResults: KnowledgeSearchResult[] = [];
+
+    if (knowledgeDocs.length === 0) {
+      nextRun = attachSearchFailure(nextRun, searchStep.id, "资料库为空");
+    } else {
+      searchResults = searchKnowledgeDocuments(
+        knowledgeDocs,
+        prompt,
+        agentSettings.maxSearchResults
+      );
+      nextRun = attachSearchResults(nextRun, searchStep.id, searchResults);
+    }
+
+    nextRun = startDraftingStep(nextRun, draftingStep.id);
+    updateAgentRun(run.id, nextRun);
+
+    const context = buildAgentContext({
+      docs: knowledgeDocs,
+      results: searchResults,
+      settings: agentSettings,
+    });
+    const instruction = buildAgentInstruction(agentSettings);
+    const metadata: AgentMessageMetadata = {
+      agent: {
+        enabled: true,
+        runId: run.id,
+        context: `${instruction}\n\n${context}`,
+        planSummary: run.title,
+      },
+    };
+
+    sendMessage({ text: prompt, metadata }, { body: { model } });
+  };
+
+  useEffect(() => {
+    // When streaming ends, close the pending agent run and record a summary.
+    const pendingRunId = pendingAgentRunIdRef.current;
+    const draftStepId = pendingAgentDraftStepIdRef.current;
+    if (!pendingRunId || !draftStepId) return;
+
+    const targetRun = agentRuns.find((run) => run.id === pendingRunId);
+    if (!targetRun) return;
+
+    if (error) {
+      const reason = error.message || "请求失败";
+      const failedRun = failDraftingStep(targetRun, draftStepId, reason);
+      const finalized = finalizeAgentRun(failedRun, "failed");
+      updateAgentRun(pendingRunId, finalized);
+      pendingAgentRunIdRef.current = null;
+      pendingAgentDraftStepIdRef.current = null;
+      return;
+    }
+
+    if (isLoading) return;
+
+    const assistantMessage = (messages ?? []).find(
+      (msg) => msg.id === lastAssistantMessageId
+    );
+    if (!assistantMessage) return;
+
+    const summary = summarizeAssistantResponse(getMessageText(assistantMessage));
+    let nextRun = finishDraftingStep(
+      targetRun,
+      draftStepId,
+      summary || "已生成方案"
+    );
+    nextRun = finalizeAgentRun(nextRun, "success");
+    updateAgentRun(pendingRunId, nextRun);
+    pendingAgentRunIdRef.current = null;
+    pendingAgentDraftStepIdRef.current = null;
+  }, [
+    agentRuns,
+    error,
+    isLoading,
+    lastAssistantMessageId,
+    messages,
+  ]);
+
   const handleChangeModel = () => {
     const nextModel = model === "deepseek-v3" ? "deepseek-r1" : "deepseek-v3";
     setModel(nextModel);
@@ -427,7 +638,11 @@ function ChatSession({
       sendMessage({ text: input, messageId: editTarget.id }, { body: { model } });
       setEditTarget(null);
     } else {
-      sendMessage({ text: input }, { body: { model } });
+      if (agentSettings.enabled) {
+        void handleAgentSubmit(input);
+      } else {
+        sendMessage({ text: input }, { body: { model } });
+      }
     }
     setInput("");
   };
@@ -502,165 +717,200 @@ function ChatSession({
     setDensity((prev) => (prev === "compact" ? "comfort" : "compact"));
   };
 
+  const agentPanelProps = {
+    enabled: agentSettings.enabled,
+    onToggleEnabled: handleToggleAgent,
+    settings: agentSettings,
+    onSaveSettings: setAgentSettings,
+    runs: agentRuns,
+    activeRunId: activeAgentRunId,
+    onSelectRun: setActiveAgentRunId,
+    onClearRuns: handleClearAgentRuns,
+    documents: knowledgeDocs,
+    onImportFiles: handleImportAgentFiles,
+    onRemoveDocument: handleRemoveAgentDocument,
+  };
+
   return (
-    <div className="flex h-screen flex-col bg-slate-50 dark:bg-slate-900">
-      <ChatHeader
-        status={isLoading ? "loading" : "idle"}
-        model={model}
-        onModelToggle={handleChangeModel}
-        density={density}
-        onDensityToggle={handleToggleDensity}
-        onOpenSettings={() => setIsProviderSettingsOpen(true)}
-        providerLabel={providerLabel}
-      />
-      <div className="flex flex-1 flex-col items-center overflow-hidden">
-        <div
-          ref={scrollContainerRef}
-          className="flex w-full max-w-4xl flex-1 flex-col gap-4 overflow-auto px-4 py-4 md:px-6"
-        >
-          {error && <ErrorDisplay error={error} onDismiss={clearError} />}
-          {persistError ? <ErrorDisplay error={persistError} /> : null}
-          <div className="sticky top-0 z-10 -mx-4 border-b border-slate-200/60 bg-slate-50/80 px-4 py-2 backdrop-blur dark:border-slate-700/60 dark:bg-slate-900/80 md:-mx-6 md:px-6 relative">
-            <div className="absolute inset-x-0 top-0 h-0.5 bg-slate-200/70 dark:bg-slate-700/70">
-              <div
-                className="h-full bg-blue-500 transition-[width]"
-                style={{ width: `${scrollProgress}%` }}
-                aria-hidden
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              {isSearchOpen ? (
-                <ChatMessageSearchBar
-                  query={searchQuery}
-                  onQueryChange={setSearchQuery}
-                  matchCount={searchMatchIds.length}
-                  activeIndex={activeMatchIndex}
-                  onPrev={handleSearchPrev}
-                  onNext={handleSearchNext}
-                  onClear={handleClearSearch}
-                  hasQuery={Boolean(normalizedSearchQuery)}
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-900">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <ChatHeader
+          status={isLoading ? "loading" : "idle"}
+          model={model}
+          onModelToggle={handleChangeModel}
+          agentEnabled={agentSettings.enabled}
+          onAgentToggle={handleToggleAgent}
+          onOpenAgentPanel={() => setIsAgentPanelOpen(true)}
+          density={density}
+          onDensityToggle={handleToggleDensity}
+          onOpenSettings={() => setIsProviderSettingsOpen(true)}
+          providerLabel={providerLabel}
+        />
+        <div className="flex flex-1 flex-col items-center overflow-hidden">
+          <div
+            ref={scrollContainerRef}
+            className="flex w-full max-w-4xl flex-1 flex-col gap-4 overflow-auto px-4 py-4 md:px-6"
+          >
+            {error && <ErrorDisplay error={error} onDismiss={clearError} />}
+            {persistError ? <ErrorDisplay error={persistError} /> : null}
+            <div className="sticky top-0 z-10 -mx-4 border-b border-slate-200/60 bg-slate-50/80 px-4 py-2 backdrop-blur dark:border-slate-700/60 dark:bg-slate-900/80 md:-mx-6 md:px-6 relative">
+              <div className="absolute inset-x-0 top-0 h-0.5 bg-slate-200/70 dark:bg-slate-700/70">
+                <div
+                  className="h-full bg-blue-500 transition-[width]"
+                  style={{ width: `${scrollProgress}%` }}
+                  aria-hidden
                 />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setIsSearchOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-                >
-                  <SearchIcon fontSize="small" className="text-slate-400" />
-                  搜索当前会话
-                </button>
-              )}
-              <ChatInsightsBar messages={messages ?? []} isLoading={isLoading} />
-            </div>
-          </div>
-          {messages?.length === 0 && !error ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-gray-500 dark:text-slate-400">
-              <p className="text-sm">开始新对话</p>
-              <p className="text-xs">发送一条消息与 AI 助手聊天</p>
-              <div className="mt-4 w-full max-w-2xl">
-                <p className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                  快速开始
-                </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {QUICK_PROMPTS.map((item) => (
-                    <button
-                      key={item.title}
-                      type="button"
-                      onClick={() => handleQuickPrompt(item.prompt)}
-                      className="group rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600 dark:hover:bg-slate-800/70"
-                    >
-                      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                        {item.title}
-                      </div>
-                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        {item.description}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                {isSearchOpen ? (
+                  <ChatMessageSearchBar
+                    query={searchQuery}
+                    onQueryChange={setSearchQuery}
+                    matchCount={searchMatchIds.length}
+                    activeIndex={activeMatchIndex}
+                    onPrev={handleSearchPrev}
+                    onNext={handleSearchNext}
+                    onClear={handleClearSearch}
+                    hasQuery={Boolean(normalizedSearchQuery)}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsSearchOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    <SearchIcon fontSize="small" className="text-slate-400" />
+                    搜索当前会话
+                  </button>
+                )}
+                <ChatInsightsBar messages={messages ?? []} isLoading={isLoading} />
               </div>
             </div>
-          ) : (
-            <MessageList
-              messages={messages ?? []}
-              onEditMessage={handleStartEditMessage}
-              editingMessageId={editTarget?.id ?? null}
-              highlightedMessageIds={searchMatchIdSet}
-              activeMessageId={activeMatchId}
-              messageMetrics={messageMetrics}
-              highlightQuery={normalizedSearchQuery}
-              density={density}
-              messageFeedback={messageFeedback}
-              onFeedback={handleFeedback}
-            />
-          )}
-          {isLoading && (
-            <div className="flex justify-start">
-              <LoadingIndicator />
-            </div>
-          )}
-          <div ref={endRef} className="h-4" />
-        </div>
-        {showScrollToBottom ? (
-          <div className="w-full max-w-4xl px-4 pb-2 md:px-6">
-            <button
-              type="button"
-              onClick={() =>
-                endRef.current?.scrollIntoView({ behavior: "smooth" })
-              }
-              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              回到底部
-            </button>
+            {messages?.length === 0 && !error ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 text-gray-500 dark:text-slate-400">
+                <p className="text-sm">开始新对话</p>
+                <p className="text-xs">发送一条消息与 AI 助手聊天</p>
+                <div className="mt-4 w-full max-w-2xl">
+                  <p className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                    快速开始
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {QUICK_PROMPTS.map((item) => (
+                      <button
+                        key={item.title}
+                        type="button"
+                        onClick={() => handleQuickPrompt(item.prompt)}
+                        className="group rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600 dark:hover:bg-slate-800/70"
+                      >
+                        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          {item.title}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          {item.description}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <MessageList
+                messages={messages ?? []}
+                onEditMessage={handleStartEditMessage}
+                editingMessageId={editTarget?.id ?? null}
+                highlightedMessageIds={searchMatchIdSet}
+                activeMessageId={activeMatchId}
+                messageMetrics={messageMetrics}
+                highlightQuery={normalizedSearchQuery}
+                density={density}
+                messageFeedback={messageFeedback}
+                onFeedback={handleFeedback}
+              />
+            )}
+            {isLoading && (
+              <div className="flex justify-start">
+                <LoadingIndicator />
+              </div>
+            )}
+            <div ref={endRef} className="h-4" />
           </div>
-        ) : null}
-        <div className="w-full max-w-4xl shrink-0 px-4 pb-4 md:px-6">
-          {isEditing ? (
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-700/70 dark:bg-blue-900/30 dark:text-blue-200">
-              <span>正在编辑消息，提交后会重新生成后续回答。</span>
+          {showScrollToBottom ? (
+            <div className="w-full max-w-4xl px-4 pb-2 md:px-6">
               <button
                 type="button"
-                onClick={handleCancelEdit}
-                className="rounded-md border border-blue-300 px-2 py-1 text-xs text-blue-700 transition hover:bg-blue-100 dark:border-blue-600 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                onClick={() =>
+                  endRef.current?.scrollIntoView({ behavior: "smooth" })
+                }
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
               >
-                取消编辑
+                回到底部
               </button>
             </div>
           ) : null}
-          <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={handleRegenerateLast}
-              disabled={isLoading || isEditing || !lastAssistantMessageId}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              重新生成
-            </button>
-            <button
-              type="button"
-              onClick={handleRetryLastPrompt}
-              disabled={isLoading || !lastUserMessageText}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              重试上一问
-            </button>
+          <div className="w-full max-w-4xl shrink-0 px-4 pb-4 md:px-6">
+            {isEditing ? (
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-700/70 dark:bg-blue-900/30 dark:text-blue-200">
+                <span>正在编辑消息，提交后会重新生成后续回答。</span>
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="rounded-md border border-blue-300 px-2 py-1 text-xs text-blue-700 transition hover:bg-blue-100 dark:border-blue-600 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                >
+                  取消编辑
+                </button>
+              </div>
+            ) : null}
+            <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleRegenerateLast}
+                disabled={isLoading || isEditing || !lastAssistantMessageId}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                重新生成
+              </button>
+              <button
+                type="button"
+                onClick={handleRetryLastPrompt}
+                disabled={isLoading || !lastUserMessageText}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                重试上一问
+              </button>
+            </div>
+            <InputField
+              input={input}
+              onInputChange={setInput}
+              onSubmit={handleSubmit}
+              isLoading={isLoading}
+              onStop={stop}
+              placeholder={
+                isEditing
+                  ? "编辑后按 Enter 重新发送…"
+                  : agentSettings.enabled
+                    ? "描述你要改动的代码目标…"
+                    : "输入消息…"
+              }
+              textareaRef={inputRef}
+            />
           </div>
-          <InputField
-            input={input}
-            onInputChange={setInput}
-            onSubmit={handleSubmit}
-            isLoading={isLoading}
-            onStop={stop}
-            placeholder={isEditing ? "编辑后按 Enter 重新发送…" : "输入消息…"}
-            textareaRef={inputRef}
-          />
         </div>
+        {isProviderSettingsOpen ? (
+          <ChatProviderSettingsModal
+            config={providerConfig}
+            onClose={() => setIsProviderSettingsOpen(false)}
+            onSave={handleSaveProviderConfig}
+          />
+        ) : null}
       </div>
-      {isProviderSettingsOpen ? (
-        <ChatProviderSettingsModal
-          config={providerConfig}
-          onClose={() => setIsProviderSettingsOpen(false)}
-          onSave={handleSaveProviderConfig}
+      <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/90 p-4 dark:border-slate-700 dark:bg-slate-900/80 lg:flex">
+        <AgentPanel {...agentPanelProps} />
+      </aside>
+      {isAgentPanelOpen ? (
+        <AgentPanel
+          {...agentPanelProps}
+          isOverlay
+          onClose={() => setIsAgentPanelOpen(false)}
         />
       ) : null}
     </div>
