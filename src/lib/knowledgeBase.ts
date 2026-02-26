@@ -1,8 +1,11 @@
+import { del, get, set } from "idb-keyval";
 import type { KnowledgeDocument, KnowledgeSearchResult } from "@/types/knowledge";
 
-const DB_NAME = "deepscan-knowledge";
-const DB_VERSION = 1;
-const STORE_NAME = "documents";
+const STORAGE_KEY = "deepscan:knowledge-documents:v1";
+
+const LEGACY_DB_NAME = "deepscan-knowledge";
+const LEGACY_DB_VERSION = 1;
+const LEGACY_STORE_NAME = "documents";
 
 const createId = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -29,20 +32,20 @@ const detectLanguage = (filename: string) => {
   }
 };
 
-// Open (or create) the IndexedDB database for knowledge documents.
-const openKnowledgeDB = () => {
+// Open the legacy IndexedDB to migrate data into idb-keyval storage.
+const openLegacyDB = () => {
   return new Promise<IDBDatabase>((resolve, reject) => {
     if (typeof indexedDB === "undefined") {
       reject(new Error("IndexedDB not available"));
       return;
     }
 
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    const request = indexedDB.open(LEGACY_DB_NAME, LEGACY_DB_VERSION);
 
     request.onupgradeneeded = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(LEGACY_STORE_NAME)) {
+        db.createObjectStore(LEGACY_STORE_NAME, { keyPath: "id" });
       }
     };
 
@@ -51,26 +54,17 @@ const openKnowledgeDB = () => {
   });
 };
 
-// Await transaction completion to ensure writes are flushed.
-const waitForTransaction = (transaction: IDBTransaction) =>
-  new Promise<void>((resolve, reject) => {
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
-    transaction.onabort = () => reject(transaction.error);
-  });
-
-// Load all documents from IndexedDB for client-side searching.
-export const loadKnowledgeDocuments = async (): Promise<KnowledgeDocument[]> => {
+// Read legacy documents once when the new storage is empty.
+const loadLegacyDocuments = async (): Promise<KnowledgeDocument[]> => {
   try {
-    const db = await openKnowledgeDB();
-    const transaction = db.transaction(STORE_NAME, "readonly");
-    const store = transaction.objectStore(STORE_NAME);
+    const db = await openLegacyDB();
+    const transaction = db.transaction(LEGACY_STORE_NAME, "readonly");
+    const store = transaction.objectStore(LEGACY_STORE_NAME);
     const request = store.getAll();
     const result = await new Promise<KnowledgeDocument[]>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result as KnowledgeDocument[]);
       request.onerror = () => reject(request.error);
     });
-    await waitForTransaction(transaction);
     db.close();
     return Array.isArray(result) ? result : [];
   } catch {
@@ -78,14 +72,27 @@ export const loadKnowledgeDocuments = async (): Promise<KnowledgeDocument[]> => 
   }
 };
 
+// Load all documents from idb-keyval; fallback to legacy store for migration.
+export const loadKnowledgeDocuments = async (): Promise<KnowledgeDocument[]> => {
+  try {
+    const stored = (await get(STORAGE_KEY)) as KnowledgeDocument[] | undefined;
+    if (Array.isArray(stored) && stored.length > 0) return stored;
+
+    const legacyDocs = await loadLegacyDocuments();
+    if (legacyDocs.length > 0) {
+      await set(STORAGE_KEY, legacyDocs);
+      return legacyDocs;
+    }
+
+    return Array.isArray(stored) ? stored : [];
+  } catch {
+    return [];
+  }
+};
+
 export const saveKnowledgeDocuments = async (docs: KnowledgeDocument[]) => {
   try {
-    const db = await openKnowledgeDB();
-    const transaction = db.transaction(STORE_NAME, "readwrite");
-    const store = transaction.objectStore(STORE_NAME);
-    docs.forEach((doc) => store.put(doc));
-    await waitForTransaction(transaction);
-    db.close();
+    await set(STORAGE_KEY, docs);
   } catch {
     // Ignore write errors to keep UI responsive; caller can retry.
   }
@@ -93,12 +100,13 @@ export const saveKnowledgeDocuments = async (docs: KnowledgeDocument[]) => {
 
 export const deleteKnowledgeDocument = async (id: string) => {
   try {
-    const db = await openKnowledgeDB();
-    const transaction = db.transaction(STORE_NAME, "readwrite");
-    const store = transaction.objectStore(STORE_NAME);
-    store.delete(id);
-    await waitForTransaction(transaction);
-    db.close();
+    const stored = (await get(STORAGE_KEY)) as KnowledgeDocument[] | undefined;
+    if (!stored || stored.length === 0) return;
+    const next = stored.filter((doc) => doc.id !== id);
+    await set(STORAGE_KEY, next);
+    if (next.length === 0) {
+      await del(STORAGE_KEY);
+    }
   } catch {
     // No-op on delete failure.
   }
