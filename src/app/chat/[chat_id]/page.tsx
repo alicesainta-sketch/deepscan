@@ -19,6 +19,7 @@ import ErrorDisplay from "@/app/components/ErrorDisplay";
 import InputField from "@/app/components/InputField";
 import LoadingIndicator from "@/app/components/LoadingIndicator";
 import MessageList from "@/app/components/MessageList";
+import SearchIcon from "@mui/icons-material/Search";
 import {
   createChatTransport,
   type ChatProviderConfig,
@@ -140,6 +141,7 @@ function ChatSession({
   const [scrollProgress, setScrollProgress] = useState(0);
   const messageCount = messages?.length ?? 0;
   const isEditing = Boolean(editTarget);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const {
     query: searchQuery,
     setQuery: setSearchQuery,
@@ -152,6 +154,12 @@ function ChatSession({
     clear: clearSearch,
     normalizedQuery: normalizedSearchQuery,
   } = useMessageSearch(messages ?? []);
+  // Keep search bar visible when there is an active query.
+  useEffect(() => {
+    if (normalizedSearchQuery) {
+      setIsSearchOpen(true);
+    }
+  }, [normalizedSearchQuery]);
   const lastUserMessageText = useMemo(
     () => getLastUserMessageText(messages ?? []),
     [messages]
@@ -475,6 +483,11 @@ function ChatSession({
       inputRef.current?.focus();
     });
   };
+  const handleClearSearch = () => {
+    // Clear query and collapse to save space.
+    clearSearch();
+    setIsSearchOpen(false);
+  };
   const handleFeedback = (messageId: string, value: "up" | "down") => {
     setMessageFeedback((prev) => {
       const current = prev[messageId];
@@ -516,16 +529,27 @@ function ChatSession({
               />
             </div>
             <div className="flex flex-col gap-2">
-              <ChatMessageSearchBar
-                query={searchQuery}
-                onQueryChange={setSearchQuery}
-                matchCount={searchMatchIds.length}
-                activeIndex={activeMatchIndex}
-                onPrev={handleSearchPrev}
-                onNext={handleSearchNext}
-                onClear={clearSearch}
-                hasQuery={Boolean(normalizedSearchQuery)}
-              />
+              {isSearchOpen ? (
+                <ChatMessageSearchBar
+                  query={searchQuery}
+                  onQueryChange={setSearchQuery}
+                  matchCount={searchMatchIds.length}
+                  activeIndex={activeMatchIndex}
+                  onPrev={handleSearchPrev}
+                  onNext={handleSearchNext}
+                  onClear={handleClearSearch}
+                  hasQuery={Boolean(normalizedSearchQuery)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsSearchOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  <SearchIcon fontSize="small" className="text-slate-400" />
+                  搜索当前会话
+                </button>
+              )}
               <ChatInsightsBar messages={messages ?? []} isLoading={isLoading} />
             </div>
           </div>
