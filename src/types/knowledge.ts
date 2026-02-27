@@ -13,3 +13,13 @@ export type KnowledgeSearchResult = {
   snippet: string;
   matchedTokens: string[];
 };
+
+export type KnowledgeChunk = {
+  id: string;
+  docId: string;
+  docName: string;
+  content: string;
+  embedding: number[];
+  createdAt: number;
+  chunkIndex: number;
+};

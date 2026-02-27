@@ -17,6 +17,8 @@ const settingsSchema = z.object({
     .max(8, "最多 8 条"),
   includeFileOutline: z.boolean(),
   answerStyle: z.enum(["concise", "balanced", "detailed"]),
+  enableEmbeddings: z.boolean(),
+  embeddingModel: z.string().min(1, "模型不能为空"),
 });
 
 type AgentSettingsForm = z.infer<typeof settingsSchema>;
@@ -186,6 +188,11 @@ interface AgentPanelProps {
   onImportFiles: (files: FileList) => void;
   onRemoveDocument: (id: string) => void;
   onToggleCollapsed?: () => void;
+  embeddingStatus: "idle" | "building" | "ready" | "error";
+  embeddingError?: string;
+  embeddingCount: number;
+  embeddingAvailable: boolean;
+  onRebuildEmbeddings: () => void;
   onClose?: () => void;
   isOverlay?: boolean;
 }
@@ -203,6 +210,11 @@ export default function AgentPanel({
   onImportFiles,
   onRemoveDocument,
   onToggleCollapsed,
+  embeddingStatus,
+  embeddingError,
+  embeddingCount,
+  embeddingAvailable,
+  onRebuildEmbeddings,
   onClose,
   isOverlay = false,
 }: AgentPanelProps) {
@@ -226,6 +238,8 @@ export default function AgentPanel({
       maxSearchResults: settings.maxSearchResults,
       includeFileOutline: settings.includeFileOutline,
       answerStyle: settings.answerStyle,
+      enableEmbeddings: settings.enableEmbeddings,
+      embeddingModel: settings.embeddingModel,
     },
   });
 
@@ -234,6 +248,8 @@ export default function AgentPanel({
       maxSearchResults: settings.maxSearchResults,
       includeFileOutline: settings.includeFileOutline,
       answerStyle: settings.answerStyle,
+      enableEmbeddings: settings.enableEmbeddings,
+      embeddingModel: settings.embeddingModel,
     });
   }, [reset, settings]);
 
@@ -466,6 +482,65 @@ export default function AgentPanel({
             </select>
           </label>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+            Embedding 检索
+          </p>
+          <button
+            type="button"
+            onClick={onRebuildEmbeddings}
+            disabled={!embeddingAvailable || embeddingStatus === "building"}
+            className="rounded-md border border-slate-200 px-2 py-1 text-[10px] text-slate-500 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            重建索引
+          </button>
+        </div>
+        <div className="mt-3 grid gap-3">
+          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              {...register("enableEmbeddings")}
+              disabled={!embeddingAvailable}
+              className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+            />
+            启用向量检索
+          </label>
+          <label className="text-xs text-slate-600 dark:text-slate-300">
+            Embedding 模型
+            <input
+              {...register("embeddingModel")}
+              disabled={!embeddingAvailable}
+              placeholder="text-embedding-3-small"
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-slate-500 dark:disabled:bg-slate-800"
+            />
+            {errors.embeddingModel ? (
+              <span className="mt-1 block text-[11px] text-rose-600 dark:text-rose-300">
+                {errors.embeddingModel.message}
+              </span>
+            ) : null}
+          </label>
+        </div>
+        <div className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">
+          {embeddingAvailable
+            ? `索引状态：${
+                embeddingStatus === "building"
+                  ? "构建中"
+                  : embeddingStatus === "ready"
+                    ? `已就绪（${embeddingCount} 条）`
+                    : embeddingStatus === "error"
+                      ? "构建失败"
+                      : "未构建"
+              }`
+            : "仅直连（OpenAI-compatible）模式可用"}
+        </div>
+        {embeddingError ? (
+          <div className="mt-2 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] text-rose-600 dark:border-rose-700/60 dark:bg-rose-900/20 dark:text-rose-200">
+            {embeddingError}
+          </div>
+        ) : null}
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">

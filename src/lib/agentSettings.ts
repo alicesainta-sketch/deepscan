@@ -9,6 +9,8 @@ export type AgentSettings = {
   maxSearchResults: number;
   includeFileOutline: boolean;
   answerStyle: AgentAnswerStyle;
+  enableEmbeddings: boolean;
+  embeddingModel: string;
 };
 
 export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
@@ -16,6 +18,8 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   maxSearchResults: 4,
   includeFileOutline: true,
   answerStyle: "balanced",
+  enableEmbeddings: false,
+  embeddingModel: "text-embedding-3-small",
 };
 
 const normalizeAnswerStyle = (value: unknown): AgentAnswerStyle => {
@@ -35,6 +39,10 @@ const clampNumber = (value: unknown, min: number, max: number) => {
 export const normalizeAgentSettings = (
   value: Partial<AgentSettings> | null
 ): AgentSettings => {
+  const embeddingModel =
+    typeof value?.embeddingModel === "string" && value.embeddingModel.trim()
+      ? value.embeddingModel.trim()
+      : DEFAULT_AGENT_SETTINGS.embeddingModel;
   return {
     enabled: Boolean(value?.enabled),
     maxSearchResults: clampNumber(value?.maxSearchResults, 1, 8),
@@ -43,6 +51,8 @@ export const normalizeAgentSettings = (
         ? value.includeFileOutline
         : DEFAULT_AGENT_SETTINGS.includeFileOutline,
     answerStyle: normalizeAnswerStyle(value?.answerStyle),
+    enableEmbeddings: Boolean(value?.enableEmbeddings),
+    embeddingModel,
   };
 };
 

@@ -22,7 +22,11 @@ import LoadingIndicator from "@/app/components/LoadingIndicator";
 import MessageList from "@/app/components/MessageList";
 import SearchIcon from "@mui/icons-material/Search";
 import type { AgentMessageMetadata, AgentRun } from "@/types/agent";
-import type { KnowledgeDocument, KnowledgeSearchResult } from "@/types/knowledge";
+import type {
+  KnowledgeChunk,
+  KnowledgeDocument,
+  KnowledgeSearchResult,
+} from "@/types/knowledge";
 import { loadAgentSettings, saveAgentSettings } from "@/lib/agentSettings";
 import {
   buildAgentContext,
@@ -68,6 +72,11 @@ import {
   searchKnowledgeDocuments,
   upsertKnowledgeDocuments,
 } from "@/lib/knowledgeBase";
+import {
+  loadKnowledgeEmbeddings,
+  rebuildKnowledgeEmbeddings,
+  searchKnowledgeEmbeddings,
+} from "@/lib/knowledgeEmbeddings";
 import { useHydrated } from "@/lib/useHydrated";
 import { useMessageSearch } from "@/lib/useMessageSearch";
 
@@ -149,6 +158,11 @@ function ChatSession({
   const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
   const [activeAgentRunId, setActiveAgentRunId] = useState<string | null>(null);
   const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>([]);
+  const [embeddingChunks, setEmbeddingChunks] = useState<KnowledgeChunk[]>([]);
+  const [embeddingStatus, setEmbeddingStatus] = useState<
+    "idle" | "building" | "ready" | "error"
+  >("idle");
+  const [embeddingError, setEmbeddingError] = useState("");
   const [density, setDensity] = useState<"comfort" | "compact">(() => {
     if (typeof window === "undefined") return "comfort";
     const stored = localStorage.getItem(DENSITY_STORAGE_KEY);
@@ -402,6 +416,24 @@ function ChatSession({
   }, []);
 
   useEffect(() => {
+    let isActive = true;
+
+    const loadEmbeddings = async () => {
+      const chunks = await loadKnowledgeEmbeddings();
+      if (!isActive) return;
+      setEmbeddingChunks(chunks);
+      setEmbeddingStatus(chunks.length > 0 ? "ready" : "idle");
+      setEmbeddingError("");
+    };
+
+    void loadEmbeddings();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const storedRuns = loadAgentRuns(sessionId);
     setAgentRuns(storedRuns);
     setActiveAgentRunId(storedRuns[0]?.id ?? null);
@@ -541,6 +573,9 @@ function ChatSession({
     if (docs.length === 0) return;
     const merged = await upsertKnowledgeDocuments(docs);
     setKnowledgeDocs(merged);
+    if (agentSettings.enableEmbeddings && providerConfig.mode === "openai-compatible") {
+      await handleRebuildEmbeddings(merged);
+    }
   };
 
   const handleRemoveAgentDocument = async (id: string) => {
@@ -552,6 +587,39 @@ function ChatSession({
     clearAgentRuns(sessionId);
     setAgentRuns([]);
     setActiveAgentRunId(null);
+  };
+
+  const handleRebuildEmbeddings = async (docsOverride?: KnowledgeDocument[]) => {
+    if (providerConfig.mode !== "openai-compatible") {
+      setEmbeddingStatus("error");
+      setEmbeddingError("仅直连（OpenAI-compatible）模式可用");
+      return;
+    }
+    const docs = docsOverride ?? knowledgeDocs;
+    if (!docs.length) {
+      setEmbeddingStatus("idle");
+      setEmbeddingError("暂无可构建的资料");
+      setEmbeddingChunks([]);
+      return;
+    }
+
+    setEmbeddingStatus("building");
+    setEmbeddingError("");
+    try {
+      const chunks = await rebuildKnowledgeEmbeddings({
+        docs,
+        config: providerConfig,
+        model: agentSettings.embeddingModel,
+      });
+      setEmbeddingChunks(chunks);
+      setEmbeddingStatus(chunks.length > 0 ? "ready" : "idle");
+      setEmbeddingError("");
+    } catch (error) {
+      setEmbeddingStatus("error");
+      setEmbeddingError(
+        error instanceof Error ? error.message : "向量构建失败"
+      );
+    }
   };
 
   const handleAgentSubmit = async (prompt: string) => {
@@ -576,16 +644,47 @@ function ChatSession({
 
     let nextRun = run;
     let searchResults: KnowledgeSearchResult[] = [];
+    let usedEmbeddings = false;
 
     if (knowledgeDocs.length === 0) {
       nextRun = attachSearchFailure(nextRun, searchStep.id, "资料库为空");
     } else {
-      searchResults = searchKnowledgeDocuments(
-        knowledgeDocs,
-        prompt,
-        agentSettings.maxSearchResults
-      );
+      if (
+        agentSettings.enableEmbeddings &&
+        providerConfig.mode === "openai-compatible" &&
+        embeddingChunks.length > 0
+      ) {
+        try {
+          searchResults = await searchKnowledgeEmbeddings({
+            query: prompt,
+            chunks: embeddingChunks,
+            config: providerConfig,
+            model: agentSettings.embeddingModel,
+            topK: agentSettings.maxSearchResults,
+          });
+          usedEmbeddings = searchResults.length > 0;
+        } catch (error) {
+          setEmbeddingStatus("error");
+          setEmbeddingError(
+            error instanceof Error ? error.message : "向量检索失败，已回退关键词"
+          );
+          usedEmbeddings = false;
+        }
+      }
+
+      if (!usedEmbeddings) {
+        searchResults = searchKnowledgeDocuments(
+          knowledgeDocs,
+          prompt,
+          agentSettings.maxSearchResults
+        );
+      }
+
       nextRun = attachSearchResults(nextRun, searchStep.id, searchResults);
+      const modeLabel = usedEmbeddings ? "向量检索" : "关键词检索";
+      nextRun = updateAgentRunStep(nextRun, searchStep.id, {
+        outputSummary: `${modeLabel} · 命中 ${searchResults.length} 个片段`,
+      });
     }
 
     nextRun = startDraftingStep(nextRun, draftingStep.id);
@@ -776,6 +875,7 @@ function ChatSession({
     setIsAgentPanelCollapsed((prev) => !prev);
   };
 
+  const embeddingAvailable = providerConfig.mode === "openai-compatible";
   const agentPanelProps = {
     enabled: agentSettings.enabled,
     onToggleEnabled: handleToggleAgent,
@@ -789,6 +889,13 @@ function ChatSession({
     onImportFiles: handleImportAgentFiles,
     onRemoveDocument: handleRemoveAgentDocument,
     onToggleCollapsed: handleToggleAgentPanelCollapsed,
+    embeddingStatus,
+    embeddingError,
+    embeddingCount: embeddingChunks.length,
+    embeddingAvailable,
+    onRebuildEmbeddings: () => {
+      void handleRebuildEmbeddings();
+    },
   };
 
   return (

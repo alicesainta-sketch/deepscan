@@ -68,6 +68,10 @@ const buildHeaders = (config: ChatProviderConfig) => {
   } as Record<string, string>;
 };
 
+// Expose auth headers for reuse in embedding requests.
+export const buildProviderHeaders = (config: ChatProviderConfig) =>
+  buildHeaders(config) ?? {};
+
 const normalizeHeaders = (headers?: HeadersInit) => {
   if (!headers) return {};
   if (headers instanceof Headers) {
