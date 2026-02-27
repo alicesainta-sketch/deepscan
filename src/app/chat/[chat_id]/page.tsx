@@ -77,6 +77,7 @@ const MAX_DRAFT_PERSIST_RETRIES = 3;
 const DRAFT_PERSIST_RETRY_DELAY_MS = 1500;
 const DENSITY_STORAGE_KEY = "deepscan:ui-density";
 const FEEDBACK_STORAGE_PREFIX = "deepscan:chat-feedback:";
+const AGENT_PANEL_COLLAPSED_KEY = "deepscan:agent-panel-collapsed";
 const QUICK_PROMPTS = [
   {
     title: "会议纪要",
@@ -141,6 +142,10 @@ function ChatSession({
     loadAgentSettings()
   );
   const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false);
+  const [isAgentPanelCollapsed, setIsAgentPanelCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(AGENT_PANEL_COLLAPSED_KEY) === "1";
+  });
   const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
   const [activeAgentRunId, setActiveAgentRunId] = useState<string | null>(null);
   const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>([]);
@@ -346,8 +351,38 @@ function ChatSession({
   }, [density]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(
+      AGENT_PANEL_COLLAPSED_KEY,
+      isAgentPanelCollapsed ? "1" : "0"
+    );
+  }, [isAgentPanelCollapsed]);
+
+  useEffect(() => {
     saveAgentSettings(agentSettings);
   }, [agentSettings]);
+
+  useEffect(() => {
+    // Keyboard shortcuts for Agent panel toggling.
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isMod = event.metaKey || event.ctrlKey;
+      if (!isMod) return;
+
+      if (event.key === "\\") {
+        event.preventDefault();
+        setIsAgentPanelCollapsed((prev) => !prev);
+        return;
+      }
+
+      if (event.key.toLowerCase() === "a" && event.shiftKey) {
+        event.preventDefault();
+        setIsAgentPanelOpen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -737,6 +772,10 @@ function ChatSession({
     setDensity((prev) => (prev === "compact" ? "comfort" : "compact"));
   };
 
+  const handleToggleAgentPanelCollapsed = () => {
+    setIsAgentPanelCollapsed((prev) => !prev);
+  };
+
   const agentPanelProps = {
     enabled: agentSettings.enabled,
     onToggleEnabled: handleToggleAgent,
@@ -749,6 +788,7 @@ function ChatSession({
     documents: knowledgeDocs,
     onImportFiles: handleImportAgentFiles,
     onRemoveDocument: handleRemoveAgentDocument,
+    onToggleCollapsed: handleToggleAgentPanelCollapsed,
   };
 
   return (
@@ -923,8 +963,23 @@ function ChatSession({
           />
         ) : null}
       </div>
-      <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/90 p-4 dark:border-slate-700 dark:bg-slate-900/80 lg:flex">
-        <AgentPanel {...agentPanelProps} />
+      <aside className="hidden shrink-0 border-l border-slate-200 bg-slate-50/90 dark:border-slate-700 dark:bg-slate-900/80 lg:flex">
+        {isAgentPanelCollapsed ? (
+          <div className="flex w-12 flex-col items-center justify-center gap-3 p-2">
+            <button
+              type="button"
+              onClick={handleToggleAgentPanelCollapsed}
+              className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              展开
+            </button>
+            <span className="text-[10px] text-slate-400">Agent</span>
+          </div>
+        ) : (
+          <div className="w-80 p-4">
+            <AgentPanel {...agentPanelProps} />
+          </div>
+        )}
       </aside>
       {isAgentPanelOpen ? (
         <AgentPanel

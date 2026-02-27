@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { AgentRun } from "@/types/agent";
@@ -50,6 +51,55 @@ const getRunStatusBadge = (status: AgentRun["status"]) => {
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// Count total matches for tokens inside the source content.
+const countTokenMatches = (content: string, tokens: string[]) => {
+  const uniqueTokens = Array.from(new Set(tokens.filter(Boolean)));
+  if (!uniqueTokens.length) return 0;
+  return uniqueTokens.reduce((total, token) => {
+    const regex = new RegExp(escapeRegExp(token), "gi");
+    const matches = content.match(regex);
+    return total + (matches?.length ?? 0);
+  }, 0);
+};
+
+// Build context snippets around matched tokens for quick copy.
+const collectMatchSnippets = (
+  content: string,
+  tokens: string[],
+  radius = 80
+) => {
+  const uniqueTokens = Array.from(new Set(tokens.filter(Boolean)));
+  if (!uniqueTokens.length) return [];
+  const lower = content.toLowerCase();
+  const ranges: Array<{ start: number; end: number }> = [];
+
+  uniqueTokens.forEach((token) => {
+    const needle = token.toLowerCase();
+    if (!needle) return;
+    let index = lower.indexOf(needle);
+    while (index >= 0) {
+      const start = Math.max(0, index - radius);
+      const end = Math.min(content.length, index + needle.length + radius);
+      ranges.push({ start, end });
+      index = lower.indexOf(needle, index + needle.length);
+    }
+  });
+
+  if (!ranges.length) return [];
+  ranges.sort((a, b) => a.start - b.start);
+  const merged: Array<{ start: number; end: number }> = [];
+  ranges.forEach((range) => {
+    const last = merged[merged.length - 1];
+    if (!last || range.start > last.end) {
+      merged.push({ ...range });
+    } else {
+      last.end = Math.max(last.end, range.end);
+    }
+  });
+
+  return merged.map((range) => content.slice(range.start, range.end));
+};
+
 // Highlight matched tokens in the source document text.
 const buildHighlightedNodes = (content: string, tokens: string[]) => {
   if (!tokens.length) return content;
@@ -58,7 +108,7 @@ const buildHighlightedNodes = (content: string, tokens: string[]) => {
   const pattern = uniqueTokens.map((token) => escapeRegExp(token)).join("|");
   if (!pattern) return content;
   const regex = new RegExp(`(${pattern})`, "gi");
-  const nodes: React.ReactNode[] = [];
+  const nodes: ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = regex.exec(content)) !== null) {
@@ -83,6 +133,45 @@ const buildHighlightedNodes = (content: string, tokens: string[]) => {
   return nodes.length ? nodes : content;
 };
 
+// Generate a markdown report for a single run export.
+const buildRunMarkdown = (run: AgentRun) => {
+  const lines: string[] = [
+    `# Agent 运行报告：${run.title}`,
+    `- 状态：${getAgentRunStatusLabel(run.status)}`,
+    `- 创建时间：${new Date(run.createdAt).toLocaleString("zh-CN")}`,
+    `- 提示词：${run.prompt}`,
+    "",
+    "## 步骤明细",
+  ];
+
+  run.steps.forEach((step) => {
+    lines.push(`### ${step.title}（${getStepStatusLabel(step.status)}）`);
+    if (step.inputSummary) lines.push(`- 输入：${step.inputSummary}`);
+    if (step.outputSummary) lines.push(`- 输出：${step.outputSummary}`);
+    if (step.error) lines.push(`- 失败原因：${step.error}`);
+    if (step.details?.length) {
+      lines.push(`- 详情：`);
+      step.details.forEach((detail) => {
+        lines.push(`  - ${detail.title}: ${detail.content}`);
+      });
+    }
+    lines.push("");
+  });
+
+  return lines.join("\n");
+};
+
+// Trigger a client-side file download for export results.
+const downloadFile = (content: string, filename: string, type: string) => {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+};
+
 interface AgentPanelProps {
   enabled: boolean;
   onToggleEnabled: () => void;
@@ -95,6 +184,7 @@ interface AgentPanelProps {
   documents: KnowledgeDocument[];
   onImportFiles: (files: FileList) => void;
   onRemoveDocument: (id: string) => void;
+  onToggleCollapsed?: () => void;
   onClose?: () => void;
   isOverlay?: boolean;
 }
@@ -111,6 +201,7 @@ export default function AgentPanel({
   documents,
   onImportFiles,
   onRemoveDocument,
+  onToggleCollapsed,
   onClose,
   isOverlay = false,
 }: AgentPanelProps) {
@@ -120,6 +211,8 @@ export default function AgentPanel({
     null
   );
   const [previewTokens, setPreviewTokens] = useState<string[]>([]);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [copyStatus, setCopyStatus] = useState<"snippets" | "full" | null>(null);
   const {
     register,
     handleSubmit,
@@ -148,6 +241,21 @@ export default function AgentPanel({
     [runs, activeRunId]
   );
 
+  const previewMatchCount = useMemo(() => {
+    if (!previewDocument) return 0;
+    return countTokenMatches(previewDocument.content, previewTokens);
+  }, [previewDocument, previewTokens]);
+
+  const previewSnippets = useMemo(() => {
+    if (!previewDocument) return [];
+    return collectMatchSnippets(previewDocument.content, previewTokens);
+  }, [previewDocument, previewTokens]);
+
+  const previewSnippetText = useMemo(() => {
+    if (!previewSnippets.length) return "";
+    return previewSnippets.join("\n\n---\n\n");
+  }, [previewSnippets]);
+
   useEffect(() => {
     if (!previewRef.current) return;
     if (!previewTokens.length) return;
@@ -157,6 +265,14 @@ export default function AgentPanel({
       firstMark.scrollIntoView({ block: "center", behavior: "smooth" });
     }
   }, [previewTokens, previewDocument]);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleSave = (values: AgentSettingsForm) => {
     // Validate with zod and reflect any issues in the form state.
@@ -189,12 +305,58 @@ export default function AgentPanel({
     if (!doc) return;
     setPreviewDocument(doc);
     setPreviewTokens(tokens ?? []);
+    setCopyStatus(null);
   };
 
   const handleClosePreview = () => {
     // Reset preview state to avoid leaking token highlights.
+    if (copyTimerRef.current) {
+      clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
+    }
     setPreviewDocument(null);
     setPreviewTokens([]);
+    setCopyStatus(null);
+  };
+
+  const handleCopyText = async (
+    text: string,
+    kind: "snippets" | "full"
+  ) => {
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      return;
+    }
+    if (copyTimerRef.current) {
+      clearTimeout(copyTimerRef.current);
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus(kind);
+      copyTimerRef.current = setTimeout(() => {
+        setCopyStatus(null);
+      }, 1500);
+    } catch {
+      setCopyStatus(null);
+    }
+  };
+
+  const handleExportJson = () => {
+    if (!runs.length) return;
+    const payload = {
+      kind: "deepscan-agent-export",
+      exportedAt: Date.now(),
+      runs,
+    };
+    const filename = `deepscan-agent-runs-${Date.now()}.json`;
+    downloadFile(JSON.stringify(payload, null, 2), filename, "application/json");
+  };
+
+  const handleExportMarkdown = () => {
+    const target = activeRun ?? runs[0];
+    if (!target) return;
+    const content = buildRunMarkdown(target);
+    const filename = `deepscan-agent-run-${target.id}.md`;
+    downloadFile(content, filename, "text/markdown");
   };
 
   const panelBody = (
@@ -208,15 +370,26 @@ export default function AgentPanel({
             面向代码辅助的可视化任务流。
           </p>
         </div>
-        {onClose ? (
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            关闭
-          </button>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {onToggleCollapsed && !isOverlay ? (
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              折叠
+            </button>
+          ) : null}
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              关闭
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
@@ -361,13 +534,31 @@ export default function AgentPanel({
           <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
             运行记录
           </p>
-          <button
-            type="button"
-            onClick={onClearRuns}
-            className="rounded-md border border-slate-200 px-2 py-1 text-[10px] text-slate-500 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            清空
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportMarkdown}
+              disabled={!runs.length}
+              className="rounded-md border border-slate-200 px-2 py-1 text-[10px] text-slate-500 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              导出 MD
+            </button>
+            <button
+              type="button"
+              onClick={handleExportJson}
+              disabled={!runs.length}
+              className="rounded-md border border-slate-200 px-2 py-1 text-[10px] text-slate-500 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              导出 JSON
+            </button>
+            <button
+              type="button"
+              onClick={onClearRuns}
+              className="rounded-md border border-slate-200 px-2 py-1 text-[10px] text-slate-500 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              清空
+            </button>
+          </div>
         </div>
         {runs.length === 0 ? (
           <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
@@ -520,6 +711,38 @@ export default function AgentPanel({
                 >
                   关闭
                 </button>
+              </div>
+              <div className="relative z-10 mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                <span>命中数量：{previewMatchCount}</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCopyText(
+                        previewSnippetText || "无命中片段",
+                        "snippets"
+                      )
+                    }
+                    disabled={!previewSnippetText}
+                    className="rounded-md border border-slate-200 px-2 py-0.5 text-[10px] text-slate-500 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    复制命中片段
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleCopyText(previewDocument.content, "full")
+                    }
+                    className="rounded-md border border-slate-200 px-2 py-0.5 text-[10px] text-slate-500 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    复制全文
+                  </button>
+                  {copyStatus ? (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
+                      {copyStatus === "full" ? "全文已复制" : "片段已复制"}
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <div
                 ref={previewRef}
