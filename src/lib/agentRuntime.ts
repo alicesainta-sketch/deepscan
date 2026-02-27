@@ -202,6 +202,8 @@ const formatResultDetails = (
     title: result.name,
     content: result.snippet,
     meta: `命中词: ${result.matchedTokens.join("/")}`,
+    sourceId: result.id,
+    matchTokens: result.matchedTokens,
   }));
 };
 

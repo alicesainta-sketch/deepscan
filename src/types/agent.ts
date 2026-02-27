@@ -11,6 +11,8 @@ export type AgentStepDetail = {
   title: string;
   content: string;
   meta?: string;
+  sourceId?: string;
+  matchTokens?: string[];
 };
 
 export type AgentStep = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { AgentRun } from "@/types/agent";
@@ -46,6 +46,43 @@ const getRunStatusBadge = (status: AgentRun["status"]) => {
   return "bg-slate-100 text-slate-600";
 };
 
+// Escape user tokens for regex-safe highlighting.
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Highlight matched tokens in the source document text.
+const buildHighlightedNodes = (content: string, tokens: string[]) => {
+  if (!tokens.length) return content;
+  const uniqueTokens = Array.from(new Set(tokens.filter(Boolean)));
+  if (!uniqueTokens.length) return content;
+  const pattern = uniqueTokens.map((token) => escapeRegExp(token)).join("|");
+  if (!pattern) return content;
+  const regex = new RegExp(`(${pattern})`, "gi");
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(content)) !== null) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (start > lastIndex) {
+      nodes.push(content.slice(lastIndex, start));
+    }
+    nodes.push(
+      <mark
+        key={`${start}-${end}`}
+        className="rounded bg-amber-200/80 px-0.5 text-slate-900 dark:bg-amber-400/30 dark:text-amber-100"
+      >
+        {content.slice(start, end)}
+      </mark>
+    );
+    lastIndex = end;
+  }
+  if (lastIndex < content.length) {
+    nodes.push(content.slice(lastIndex));
+  }
+  return nodes.length ? nodes : content;
+};
+
 interface AgentPanelProps {
   enabled: boolean;
   onToggleEnabled: () => void;
@@ -78,6 +115,11 @@ export default function AgentPanel({
   isOverlay = false,
 }: AgentPanelProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  const [previewDocument, setPreviewDocument] = useState<KnowledgeDocument | null>(
+    null
+  );
+  const [previewTokens, setPreviewTokens] = useState<string[]>([]);
   const {
     register,
     handleSubmit,
@@ -106,6 +148,16 @@ export default function AgentPanel({
     [runs, activeRunId]
   );
 
+  useEffect(() => {
+    if (!previewRef.current) return;
+    if (!previewTokens.length) return;
+    // Scroll to the first highlighted token for quick locate.
+    const firstMark = previewRef.current.querySelector("mark");
+    if (firstMark) {
+      firstMark.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [previewTokens, previewDocument]);
+
   const handleSave = (values: AgentSettingsForm) => {
     // Validate with zod and reflect any issues in the form state.
     clearErrors();
@@ -128,6 +180,21 @@ export default function AgentPanel({
       ...parsed.data,
     });
     onSaveSettings(nextSettings);
+  };
+
+  const handleOpenPreview = (documentId?: string, tokens?: string[]) => {
+    // Open a lightweight preview panel and highlight matched tokens.
+    if (!documentId) return;
+    const doc = documents.find((item) => item.id === documentId);
+    if (!doc) return;
+    setPreviewDocument(doc);
+    setPreviewTokens(tokens ?? []);
+  };
+
+  const handleClosePreview = () => {
+    // Reset preview state to avoid leaking token highlights.
+    setPreviewDocument(null);
+    setPreviewTokens([]);
   };
 
   const panelBody = (
@@ -398,6 +465,17 @@ export default function AgentPanel({
                             {detail.meta}
                           </p>
                         ) : null}
+                        {detail.sourceId ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleOpenPreview(detail.sourceId, detail.matchTokens)
+                            }
+                            className="mt-1 rounded-md border border-slate-200 px-2 py-0.5 text-[10px] text-slate-500 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                          >
+                            查看原文
+                          </button>
+                        ) : null}
                         <pre className="mt-1 whitespace-pre-wrap text-[10px] text-slate-500 dark:text-slate-400">
                           {detail.content}
                         </pre>
@@ -414,12 +492,62 @@ export default function AgentPanel({
   );
 
   if (!isOverlay) {
-    return panelBody;
+    return (
+      <>
+        {panelBody}
+        {previewDocument ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
+            <button
+              type="button"
+              onClick={handleClosePreview}
+              className="absolute inset-0"
+              aria-label="关闭预览"
+            />
+            <div className="relative w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+              <div className="relative z-10 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {previewDocument.name}
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    代码原文预览（命中词已高亮）
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClosePreview}
+                  className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  关闭
+                </button>
+              </div>
+              <div
+                ref={previewRef}
+                className="relative z-10 mt-3 max-h-[60vh] overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-700 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-200"
+              >
+                <pre className="whitespace-pre-wrap">
+                  {buildHighlightedNodes(
+                    previewDocument.content,
+                    previewTokens
+                  )}
+                </pre>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </>
+    );
   }
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4 py-6">
-      <div className="max-h-full w-full max-w-md overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute inset-0"
+        aria-label="关闭面板"
+      />
+      <div className="relative max-h-full w-full max-w-md overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900">
         {panelBody}
       </div>
     </div>
