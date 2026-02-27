@@ -11,7 +11,8 @@ import { getAgentRunStatusLabel, normalizeAgentSettings } from "@/lib/agentSetti
 
 const settingsSchema = z.object({
   maxSearchResults: z
-    .number({ invalid_type_error: "请输入有效数字" })
+    .coerce
+    .number()
     .min(1, "最少 1 条")
     .max(8, "最多 8 条"),
   includeFileOutline: z.boolean(),
