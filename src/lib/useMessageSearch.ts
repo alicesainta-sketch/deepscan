@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { UIMessage } from "ai";
 import { getMessageText } from "@/lib/chatMessages";
+import { normalizeSearchText } from "@/lib/searchUtils";
 
 type MessageSearchState = {
   query: string;
@@ -18,13 +19,14 @@ type MessageSearchState = {
 export const useMessageSearch = (messages: UIMessage[]): MessageSearchState => {
   const [query, setQuery] = useState("");
   const [activeMatchIndex, setActiveMatchIndex] = useState(0);
-  const normalizedQuery = query.trim().toLowerCase();
+  // Normalize user input so matching is case-insensitive and stable.
+  const normalizedQuery = normalizeSearchText(query);
 
   const matchIds = useMemo(() => {
     if (!normalizedQuery) return [];
     return messages
       .filter((message) =>
-        getMessageText(message).toLowerCase().includes(normalizedQuery)
+        normalizeSearchText(getMessageText(message)).includes(normalizedQuery)
       )
       .map((message) => message.id);
   }, [messages, normalizedQuery]);

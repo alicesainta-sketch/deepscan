@@ -15,6 +15,7 @@ import {
 } from "@/lib/chatStore";
 import type { ChatExportPayload } from "@/lib/chatStore";
 import { getStoredMessagesText } from "@/lib/chatMessageStorage";
+import { normalizeSearchText } from "@/lib/searchUtils";
 import type { ChatModel } from "@/types/chat";
 import ChatBulkActions from "@/components/ChatBulkActions";
 import {
@@ -106,6 +107,8 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
   const [selectedChatIds, setSelectedChatIds] = React.useState<Set<number>>(
     () => new Set()
   );
+  // Defer search filtering work to keep typing responsive with large histories.
+  const deferredKeyword = React.useDeferredValue(keyword);
   const importInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
@@ -131,7 +134,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
 
   const messageIndex = React.useMemo(() => {
     if (!shouldLoadChats) return {};
-    const normalizedKeyword = keyword.trim().toLowerCase();
+    const normalizedKeyword = normalizeSearchText(deferredKeyword);
     if (!normalizedKeyword) return {};
     if (typeof window === "undefined") return {};
     const index: Record<number, string> = {};
@@ -139,20 +142,20 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
       index[chat.id] = getStoredMessagesText(String(chat.id));
     });
     return index;
-  }, [chats, keyword, shouldLoadChats]);
+  }, [chats, deferredKeyword, shouldLoadChats]);
 
   const filteredChats = React.useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase();
+    const normalizedKeyword = normalizeSearchText(deferredKeyword);
     if (!normalizedKeyword) return chats;
     return chats.filter((chat) => {
-      const messageText = messageIndex[chat.id] ?? "";
+      const messageText = normalizeSearchText(messageIndex[chat.id] ?? "");
       return (
-        chat.title.toLowerCase().includes(normalizedKeyword) ||
-        chat.model.toLowerCase().includes(normalizedKeyword) ||
+        normalizeSearchText(chat.title).includes(normalizedKeyword) ||
+        normalizeSearchText(chat.model).includes(normalizedKeyword) ||
         messageText.includes(normalizedKeyword)
       );
     });
-  }, [chats, keyword, messageIndex]);
+  }, [chats, deferredKeyword, messageIndex]);
 
   const groupedFilteredChats = React.useMemo(
     () => groupChatsByRecency(filteredChats),
