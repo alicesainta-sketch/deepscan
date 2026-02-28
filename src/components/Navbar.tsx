@@ -17,21 +17,23 @@ import type { ChatExportPayload } from "@/lib/chatStore";
 import { getStoredMessagesText } from "@/lib/chatMessageStorage";
 import type { ChatModel } from "@/types/chat";
 import ChatBulkActions from "@/components/ChatBulkActions";
-import AddIcon from "@mui/icons-material/Add";
-import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
-import CheckIcon from "@mui/icons-material/Check";
-import CloseIcon from "@mui/icons-material/Close";
-import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
-import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
-import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrowLeft";
-import KeyboardDoubleArrowRightIcon from "@mui/icons-material/KeyboardDoubleArrowRight";
-import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
-import PushPinIcon from "@mui/icons-material/PushPin";
-import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
-import SearchIcon from "@mui/icons-material/Search";
+import {
+  IconCheck,
+  IconChevronsLeft,
+  IconChevronsRight,
+  IconClose,
+  IconDownload,
+  IconMessage,
+  IconMoon,
+  IconPencil,
+  IconPin,
+  IconPinOff,
+  IconPlus,
+  IconSearch,
+  IconSun,
+  IconTrash,
+  IconUpload,
+} from "@/components/icons";
 import { useTheme } from "@/components/ThemeProvider";
 
 type NavbarProps = {
@@ -214,6 +216,15 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
 
   const handleClearSelection = () => {
     setSelectedChatIds(new Set());
+  };
+
+  const handleSearchKeyDown = (
+    event: React.KeyboardEvent<HTMLInputElement>
+  ) => {
+    // Esc clears the keyword for quicker navigation.
+    if (event.key === "Escape") {
+      setKeyword("");
+    }
   };
 
   const runBulkAction = async (
@@ -422,7 +433,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
             aria-label="创建新对话"
             title="创建新对话"
           >
-            <AddIcon fontSize="small" />
+            <IconPlus size={16} aria-hidden />
           </button>
           <button
             type="button"
@@ -433,7 +444,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
             aria-label="导出会话"
             title="导出会话"
           >
-            <FileDownloadOutlinedIcon fontSize="small" />
+            <IconDownload size={16} aria-hidden />
           </button>
           <button
             type="button"
@@ -442,7 +453,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
             aria-label="导入会话"
             title="导入会话"
           >
-            <FileUploadOutlinedIcon fontSize="small" />
+            <IconUpload size={16} aria-hidden />
           </button>
           <button
             type="button"
@@ -452,11 +463,11 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
             title={!isHydrated ? "切换主题" : theme === "dark" ? "切换到亮色" : "切换到暗色"}
           >
             {!isHydrated ? (
-              <DarkModeOutlinedIcon fontSize="small" />
+              <IconMoon size={16} aria-hidden />
             ) : theme === "dark" ? (
-              <LightModeOutlinedIcon fontSize="small" />
+              <IconSun size={16} aria-hidden />
             ) : (
-              <DarkModeOutlinedIcon fontSize="small" />
+              <IconMoon size={16} aria-hidden />
             )}
           </button>
         </div>
@@ -470,7 +481,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
           className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-900 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
           onClick={handleCreateNewChat}
         >
-          <AddIcon fontSize="small" />
+          <IconPlus size={16} aria-hidden />
           创建新对话
         </button>
         <button
@@ -480,11 +491,11 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
           aria-label="切换亮暗色主题"
         >
           {!isHydrated ? (
-            <DarkModeOutlinedIcon fontSize="small" />
+            <IconMoon size={16} aria-hidden />
           ) : theme === "dark" ? (
-            <LightModeOutlinedIcon fontSize="small" />
+            <IconSun size={16} aria-hidden />
           ) : (
-            <DarkModeOutlinedIcon fontSize="small" />
+            <IconMoon size={16} aria-hidden />
           )}
           {!isHydrated ? "切换主题" : theme === "dark" ? "切换到亮色" : "切换到暗色"}
         </button>
@@ -496,7 +507,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
               void handleExportChats();
             }}
           >
-            <FileDownloadOutlinedIcon fontSize="inherit" />
+            <IconDownload size={14} aria-hidden />
             导出
           </button>
           <button
@@ -504,7 +515,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
             className="flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
             onClick={handleSelectImportFile}
           >
-            <FileUploadOutlinedIcon fontSize="inherit" />
+            <IconUpload size={14} aria-hidden />
             导入
           </button>
         </div>
@@ -561,7 +572,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
           disabled={isBusy}
           title={`${chat.title} (${chat.model === "deepseek-r1" ? "R1" : "V3"})`}
         >
-          <ChatBubbleOutlineIcon fontSize="small" />
+          <IconMessage size={16} aria-hidden />
           {chat.pinned ? (
             <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-amber-500" />
           ) : null}
@@ -592,9 +603,9 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
             title={collapsed ? "展开侧边栏" : "折叠侧边栏"}
           >
             {collapsed ? (
-              <KeyboardDoubleArrowRightIcon fontSize="small" />
+              <IconChevronsRight size={16} aria-hidden />
             ) : (
-              <KeyboardDoubleArrowLeftIcon fontSize="small" />
+              <IconChevronsLeft size={16} aria-hidden />
             )}
           </button>
         </div>
@@ -618,17 +629,29 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
           </div>
           <div className="px-3 pt-2">
             <label className="relative block">
-              <SearchIcon
+              <IconSearch
+                size={16}
                 className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
-                fontSize="small"
+                aria-hidden
               />
               <input
                 type="text"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
                 placeholder="搜索标题、模型或消息..."
-                className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-sm text-slate-700 outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-slate-500"
+                className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-8 text-sm text-slate-700 outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-slate-500"
               />
+              {keyword ? (
+                <button
+                  type="button"
+                  onClick={() => setKeyword("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                  aria-label="清空搜索"
+                >
+                  <IconClose size={14} aria-hidden />
+                </button>
+              ) : null}
             </label>
           </div>
           {bulkMode ? (
@@ -751,7 +774,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                               className="rounded-md p-1 text-slate-600 hover:bg-slate-200 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-700"
                               aria-label="保存标题"
                             >
-                              <CheckIcon fontSize="small" />
+                              <IconCheck size={16} aria-hidden />
                             </button>
                             <button
                               type="button"
@@ -760,7 +783,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                               className="rounded-md p-1 text-slate-600 hover:bg-slate-200 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-700"
                               aria-label="取消编辑"
                             >
-                              <CloseIcon fontSize="small" />
+                              <IconClose size={16} aria-hidden />
                             </button>
                           </div>
                         ) : (
@@ -777,9 +800,10 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                                 aria-label={isSelected ? "取消选择会话" : "选择会话"}
                               >
                                 {isSelected ? (
-                                  <CheckIcon
-                                    fontSize="inherit"
+                                  <IconCheck
+                                    size={12}
                                     className="text-white"
+                                    aria-hidden
                                   />
                                 ) : null}
                               </button>
@@ -801,13 +825,14 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                               disabled={isBusy}
                             >
                               <div className="flex w-full items-center gap-2">
-                                <ChatBubbleOutlineIcon
-                                  fontSize="small"
+                                <IconMessage
+                                  size={16}
                                   className={`shrink-0 ${
                                     isActive
                                       ? "text-blue-600 dark:text-blue-300"
                                       : "text-slate-400 dark:text-slate-500"
                                   }`}
+                                  aria-hidden
                                 />
                                 <p className="line-clamp-1 text-sm font-medium">{chat.title}</p>
                               </div>
@@ -833,9 +858,9 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                                   title={chat.pinned ? "取消置顶" : "置顶"}
                                 >
                                   {chat.pinned ? (
-                                    <PushPinIcon fontSize="small" />
+                                    <IconPin size={16} aria-hidden />
                                   ) : (
-                                    <PushPinOutlinedIcon fontSize="small" />
+                                    <IconPinOff size={16} aria-hidden />
                                   )}
                                 </button>
                                 <button
@@ -846,7 +871,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                                   aria-label="重命名会话"
                                   title="重命名"
                                 >
-                                  <EditOutlinedIcon fontSize="small" />
+                                  <IconPencil size={16} aria-hidden />
                                 </button>
                                 <button
                                   type="button"
@@ -858,7 +883,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                                   aria-label="删除会话"
                                   title="删除"
                                 >
-                                  <DeleteOutlineIcon fontSize="small" />
+                                  <IconTrash size={16} aria-hidden />
                                 </button>
                               </div>
                             ) : null}

@@ -1,8 +1,7 @@
 "use client";
 
 import { FormEvent } from "react";
-import EastIcon from "@mui/icons-material/East";
-import StopIcon from "@mui/icons-material/Stop";
+import { IconArrowRight, IconStop } from "@/components/icons";
 
 interface InputFieldProps {
   input: string;
@@ -67,7 +66,7 @@ export default function InputField({
             onClick={onStop}
             className="flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm text-red-700 hover:bg-red-100 dark:border-red-700/70 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
           >
-            <StopIcon fontSize="small" /> 停止
+            <IconStop size={16} aria-hidden /> 停止
           </button>
         ) : (
           <button
@@ -76,7 +75,7 @@ export default function InputField({
             className="flex items-center justify-center rounded-full border-2 border-gray-800 p-1.5 text-gray-800 hover:bg-gray-100 disabled:border-gray-300 disabled:text-gray-400 dark:border-slate-200 dark:text-slate-200 dark:hover:bg-slate-800 dark:disabled:border-slate-600 dark:disabled:text-slate-500"
             aria-label="发送"
           >
-            <EastIcon />
+            <IconArrowRight size={18} aria-hidden />
           </button>
         )}
       </div>

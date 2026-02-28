@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import EastIcon from "@mui/icons-material/East";
+import { IconArrowRight } from "@/components/icons";
 
 export default function Home() {
   const router = useRouter();
@@ -86,7 +86,7 @@ export default function Home() {
               aria-label="创建对话"
             >
               {isNavigating ? "跳转中" : "发送并进入"}
-              <EastIcon fontSize="small" />
+              <IconArrowRight size={16} aria-hidden />
             </button>
           </div>
         </div>

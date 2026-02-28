@@ -6,10 +6,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
 import type { UIMessage } from "ai";
-import ThumbDownAltIcon from "@mui/icons-material/ThumbDownAlt";
-import ThumbDownAltOutlinedIcon from "@mui/icons-material/ThumbDownAltOutlined";
-import ThumbUpAltIcon from "@mui/icons-material/ThumbUpAlt";
-import ThumbUpAltOutlinedIcon from "@mui/icons-material/ThumbUpAltOutlined";
+import { IconThumbDown, IconThumbUp } from "@/components/icons";
 
 interface MessageListProps {
   messages: UIMessage[];
@@ -419,14 +416,15 @@ function MessageItem({
                         ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/60 dark:bg-emerald-500/10 dark:text-emerald-200"
                         : "border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
                     }`}
+                    aria-pressed={feedback === "up"}
                     aria-label="有帮助"
                     title="有帮助"
                   >
-                    {feedback === "up" ? (
-                      <ThumbUpAltIcon fontSize="inherit" />
-                    ) : (
-                      <ThumbUpAltOutlinedIcon fontSize="inherit" />
-                    )}
+                    <IconThumbUp
+                      size={14}
+                      filled={feedback === "up"}
+                      aria-hidden
+                    />
                     有帮助
                   </button>
                   <button
@@ -437,14 +435,15 @@ function MessageItem({
                         ? "border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-500/60 dark:bg-rose-500/10 dark:text-rose-200"
                         : "border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
                     }`}
+                    aria-pressed={feedback === "down"}
                     aria-label="无帮助"
                     title="无帮助"
                   >
-                    {feedback === "down" ? (
-                      <ThumbDownAltIcon fontSize="inherit" />
-                    ) : (
-                      <ThumbDownAltOutlinedIcon fontSize="inherit" />
-                    )}
+                    <IconThumbDown
+                      size={14}
+                      filled={feedback === "down"}
+                      aria-hidden
+                    />
                     无帮助
                   </button>
                 </div>

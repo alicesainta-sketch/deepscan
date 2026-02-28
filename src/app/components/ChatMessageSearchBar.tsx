@@ -1,6 +1,8 @@
 "use client";
 
-import SearchIcon from "@mui/icons-material/Search";
+import type { KeyboardEvent } from "react";
+import { useEffect, useRef } from "react";
+import { IconSearch } from "@/components/icons";
 
 type ChatMessageSearchBarProps = {
   query: string;
@@ -23,13 +25,30 @@ export default function ChatMessageSearchBar({
   onClear,
   hasQuery,
 }: ChatMessageSearchBarProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    // Auto focus the search input when the bar becomes visible.
+    inputRef.current?.focus();
+  }, []);
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    // Esc clears and collapses the search bar for a faster exit.
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClear();
+    }
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-      <SearchIcon fontSize="small" className="text-slate-400" />
+      <IconSearch size={16} className="text-slate-400" aria-hidden />
       <input
+        ref={inputRef}
         type="text"
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
+        onKeyDown={handleKeyDown}
         placeholder="搜索当前会话消息..."
         className="min-w-[160px] flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200"
       />

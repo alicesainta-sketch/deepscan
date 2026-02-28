@@ -20,7 +20,7 @@ import ErrorDisplay from "@/app/components/ErrorDisplay";
 import InputField from "@/app/components/InputField";
 import LoadingIndicator from "@/app/components/LoadingIndicator";
 import MessageList from "@/app/components/MessageList";
-import SearchIcon from "@mui/icons-material/Search";
+import { IconSearch } from "@/components/icons";
 import type { AgentMessageMetadata, AgentRun } from "@/types/agent";
 import type {
   KnowledgeChunk,
@@ -946,7 +946,7 @@ function ChatSession({
                     onClick={() => setIsSearchOpen(true)}
                     className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                   >
-                    <SearchIcon fontSize="small" className="text-slate-400" />
+                    <IconSearch size={16} className="text-slate-400" aria-hidden />
                     搜索当前会话
                   </button>
                 )}
