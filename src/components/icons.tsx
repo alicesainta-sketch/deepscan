@@ -29,16 +29,22 @@ type ToggleIconProps = IconProps & {
 };
 
 // Factory for standard line icons to keep size and stroke consistent.
-const createIcon =
-  (Icon: LucideIcon) =>
-  ({ size = 18, strokeWidth = 1.8, ...props }: IconProps) => (
+const createIcon = (Icon: LucideIcon, name: string) => {
+  const Component = ({ size = 18, strokeWidth = 1.8, ...props }: IconProps) => (
     <Icon size={size} strokeWidth={strokeWidth} {...props} />
   );
+  Component.displayName = `Icon${name}`;
+  return Component;
+};
 
 // Factory for toggled icons that can switch between outlined and filled.
-const createToggleIcon =
-  (Icon: LucideIcon) =>
-  ({ filled = false, size = 16, strokeWidth = 1.8, ...props }: ToggleIconProps) => (
+const createToggleIcon = (Icon: LucideIcon, name: string) => {
+  const Component = ({
+    filled = false,
+    size = 16,
+    strokeWidth = 1.8,
+    ...props
+  }: ToggleIconProps) => (
     <Icon
       size={size}
       strokeWidth={strokeWidth}
@@ -46,23 +52,26 @@ const createToggleIcon =
       {...props}
     />
   );
+  Component.displayName = `Icon${name}`;
+  return Component;
+};
 
-export const IconSearch = createIcon(Search);
-export const IconArrowRight = createIcon(ArrowRight);
-export const IconStop = createIcon(Square);
-export const IconPlus = createIcon(Plus);
-export const IconMessage = createIcon(MessageSquare);
-export const IconCheck = createIcon(Check);
-export const IconClose = createIcon(X);
-export const IconMoon = createIcon(Moon);
-export const IconSun = createIcon(Sun);
-export const IconTrash = createIcon(Trash2);
-export const IconPencil = createIcon(Pencil);
-export const IconDownload = createIcon(Download);
-export const IconUpload = createIcon(Upload);
-export const IconChevronsLeft = createIcon(ChevronsLeft);
-export const IconChevronsRight = createIcon(ChevronsRight);
-export const IconPin = createIcon(Pin);
-export const IconPinOff = createIcon(PinOff);
-export const IconThumbUp = createToggleIcon(ThumbsUp);
-export const IconThumbDown = createToggleIcon(ThumbsDown);
+export const IconSearch = createIcon(Search, "Search");
+export const IconArrowRight = createIcon(ArrowRight, "ArrowRight");
+export const IconStop = createIcon(Square, "Stop");
+export const IconPlus = createIcon(Plus, "Plus");
+export const IconMessage = createIcon(MessageSquare, "Message");
+export const IconCheck = createIcon(Check, "Check");
+export const IconClose = createIcon(X, "Close");
+export const IconMoon = createIcon(Moon, "Moon");
+export const IconSun = createIcon(Sun, "Sun");
+export const IconTrash = createIcon(Trash2, "Trash");
+export const IconPencil = createIcon(Pencil, "Pencil");
+export const IconDownload = createIcon(Download, "Download");
+export const IconUpload = createIcon(Upload, "Upload");
+export const IconChevronsLeft = createIcon(ChevronsLeft, "ChevronsLeft");
+export const IconChevronsRight = createIcon(ChevronsRight, "ChevronsRight");
+export const IconPin = createIcon(Pin, "Pin");
+export const IconPinOff = createIcon(PinOff, "PinOff");
+export const IconThumbUp = createToggleIcon(ThumbsUp, "ThumbUp");
+export const IconThumbDown = createToggleIcon(ThumbsDown, "ThumbDown");

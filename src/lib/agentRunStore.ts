@@ -11,11 +11,6 @@ type AgentRunStorePayload = {
 const getStoreKey = (sessionId: string) =>
   `${AGENT_RUN_STORE_PREFIX}${sessionId}`;
 
-const getDefaultStore = (): AgentRunStorePayload => ({
-  version: AGENT_RUN_STORE_VERSION,
-  runs: [],
-});
-
 // Load agent runs scoped to a single chat session.
 export const loadAgentRuns = (sessionId: string): AgentRun[] => {
   if (typeof window === "undefined") return [];

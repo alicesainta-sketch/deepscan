@@ -861,8 +861,10 @@ function ChatSession({
     setMessageFeedback((prev) => {
       const current = prev[messageId];
       if (current === value) {
-        const { [messageId]: _, ...rest } = prev;
-        return rest;
+        // Remove the feedback entry when user toggles the same choice.
+        const next = { ...prev };
+        delete next[messageId];
+        return next;
       }
       return { ...prev, [messageId]: value };
     });
