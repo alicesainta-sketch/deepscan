@@ -4,6 +4,7 @@ export interface ChatModel {
   title: string;
   model: string;
   pinned: boolean;
+  tagId?: string | null;
   createdAt: number;
   updatedAt: number;
 }

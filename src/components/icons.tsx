@@ -14,6 +14,7 @@ import {
   Search,
   Square,
   Sun,
+  Tag,
   ThumbsDown,
   ThumbsUp,
   Trash2,
@@ -73,5 +74,6 @@ export const IconChevronsLeft = createIcon(ChevronsLeft, "ChevronsLeft");
 export const IconChevronsRight = createIcon(ChevronsRight, "ChevronsRight");
 export const IconPin = createIcon(Pin, "Pin");
 export const IconPinOff = createIcon(PinOff, "PinOff");
+export const IconTag = createIcon(Tag, "Tag");
 export const IconThumbUp = createToggleIcon(ThumbsUp, "ThumbUp");
 export const IconThumbDown = createToggleIcon(ThumbsDown, "ThumbDown");

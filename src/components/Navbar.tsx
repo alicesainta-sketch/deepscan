@@ -15,6 +15,7 @@ import {
 } from "@/lib/chatStore";
 import type { ChatExportPayload } from "@/lib/chatStore";
 import { getStoredMessagesText } from "@/lib/chatMessageStorage";
+import { CHAT_TAGS, getChatTagById } from "@/lib/chatTags";
 import { normalizeSearchText } from "@/lib/searchUtils";
 import type { ChatModel } from "@/types/chat";
 import ChatBulkActions from "@/components/ChatBulkActions";
@@ -32,6 +33,7 @@ import {
   IconPlus,
   IconSearch,
   IconSun,
+  IconTag,
   IconTrash,
   IconUpload,
 } from "@/components/icons";
@@ -98,6 +100,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
   const chatScope = getChatScope(userId);
   const [keyword, setKeyword] = React.useState("");
   const [editingChatId, setEditingChatId] = React.useState<number | null>(null);
+  const [taggingChatId, setTaggingChatId] = React.useState<number | null>(null);
   const [draftTitle, setDraftTitle] = React.useState("");
   const [actionError, setActionError] = React.useState("");
   const [actionNotice, setActionNotice] = React.useState("");
@@ -114,8 +117,15 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
   React.useEffect(() => {
     if (!collapsed) return;
     setEditingChatId(null);
+    setTaggingChatId(null);
     setDraftTitle("");
   }, [collapsed]);
+
+  React.useEffect(() => {
+    if (!bulkMode) return;
+    // 批量操作与标签编辑互斥，避免交互冲突。
+    setTaggingChatId(null);
+  }, [bulkMode]);
 
   const shouldLoadChats = !pathname.startsWith("/sign-in");
 
@@ -352,6 +362,24 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     setDraftTitle("");
   };
 
+  // 控制单个会话的标签选择面板开合。
+  const handleToggleTagPicker = (chatId: number) => {
+    setActionError("");
+    setActionNotice("");
+    setTaggingChatId((prev) => (prev === chatId ? null : chatId));
+  };
+
+  // 核心逻辑：更新会话标签并刷新列表。
+  const handleSelectTag = async (chatId: number, tagId: string | null) => {
+    await runAction(chatId, async () => {
+      const updated = await updateLocalChat(chatScope, chatId, { tagId });
+      if (!updated) {
+        throw new Error("标签更新失败，请重试");
+      }
+    });
+    setTaggingChatId(null);
+  };
+
   const handleSaveTitle = async (chatId: number) => {
     const nextTitle = draftTitle.trim();
     if (!nextTitle) {
@@ -560,6 +588,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     return filteredChats.map((chat) => {
       const isActive = pathname === `/chat/${chat.id}`;
       const isBusy = busyChatId === chat.id;
+      const tagMeta = getChatTagById(chat.tagId);
       return (
         <button
           key={chat.id}
@@ -576,6 +605,11 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
           title={`${chat.title} (${chat.model === "deepseek-r1" ? "R1" : "V3"})`}
         >
           <IconMessage size={16} aria-hidden />
+          {tagMeta ? (
+            <span
+              className={`absolute left-1 top-1 h-1.5 w-1.5 rounded-full ${tagMeta.dotClass}`}
+            />
+          ) : null}
           {chat.pinned ? (
             <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-amber-500" />
           ) : null}
@@ -742,6 +776,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                     const isEditing = editingChatId === chat.id;
                     const isBusy = busyChatId === chat.id;
                     const isSelected = selectedChatIds.has(chat.id);
+                    const tagMeta = getChatTagById(chat.tagId);
 
                     return (
                       <div
@@ -846,10 +881,27 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                                     置顶
                                   </span>
                                 ) : null}
+                                {tagMeta ? (
+                                  <span
+                                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${tagMeta.badgeClass}`}
+                                  >
+                                    {tagMeta.label}
+                                  </span>
+                                ) : null}
                               </div>
                             </button>
                             {!bulkMode ? (
                               <div className="flex shrink-0 items-center gap-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleTagPicker(chat.id)}
+                                  disabled={isBusy}
+                                  className="rounded-md p-1 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                                  aria-label="设置会话标签"
+                                  title="设置标签"
+                                >
+                                  <IconTag size={16} aria-hidden />
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -892,6 +944,49 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                             ) : null}
                           </div>
                         )}
+                        {!bulkMode && taggingChatId === chat.id ? (
+                          <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-900">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                              标签
+                            </p>
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                              {CHAT_TAGS.map((tag) => {
+                                const isActiveTag = tag.id === chat.tagId;
+                                return (
+                                  <button
+                                    key={tag.id}
+                                    type="button"
+                                    onClick={() => {
+                                      void handleSelectTag(chat.id, tag.id);
+                                    }}
+                                    disabled={isBusy}
+                                    className={`flex items-center gap-2 rounded-lg border px-2 py-1 text-xs transition ${
+                                      isActiveTag
+                                        ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-300 dark:hover:bg-slate-800"
+                                    }`}
+                                  >
+                                    <span
+                                      className={`h-2 w-2 rounded-full ${tag.dotClass}`}
+                                      aria-hidden
+                                    />
+                                    <span className="font-medium">{tag.label}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void handleSelectTag(chat.id, null);
+                              }}
+                              disabled={isBusy}
+                              className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-300 dark:hover:bg-slate-800"
+                            >
+                              清除标签
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })}
