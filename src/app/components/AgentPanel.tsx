@@ -276,7 +276,7 @@ export default function AgentPanel({
   useEffect(() => {
     if (!previewRef.current) return;
     if (!previewTokens.length) return;
-    // Scroll to the first highlighted token for quick locate.
+    // Scroll to the first highlighted token to locate matches faster.
     const firstMark = previewRef.current.querySelector("mark");
     if (firstMark) {
       firstMark.scrollIntoView({ block: "center", behavior: "smooth" });

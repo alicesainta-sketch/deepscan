@@ -28,7 +28,7 @@ export default function ChatMessageSearchBar({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    // Auto focus the search input when the bar becomes visible.
+    // Automatically focus the search input when the bar becomes visible.
     inputRef.current?.focus();
   }, []);
 
