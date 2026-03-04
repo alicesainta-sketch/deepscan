@@ -46,6 +46,56 @@ describe("chatFilters", () => {
     expect(result.map((chat) => chat.id)).toEqual([1]);
   });
 
+  it("supports multi-keyword AND matching across searchable fields", () => {
+    const chats = [
+      buildChat({ id: 1, title: "系统设计缓存策略", model: "deepseek-v3" }),
+      buildChat({ id: 2, title: "系统设计", model: "deepseek-v3" }),
+      buildChat({ id: 3, title: "缓存复盘", model: "deepseek-v3" }),
+    ];
+    const messageIndex = {
+      1: "命中率分析",
+      2: "链路追踪",
+      3: "命中率分析",
+    };
+
+    const result = filterChats(chats, {
+      keyword: "系统 命中率",
+      tagFilter: TAG_FILTER_ALL,
+      pinnedOnly: false,
+      messageIndex,
+    });
+
+    expect(result.map((chat) => chat.id)).toEqual([1]);
+  });
+
+  it("returns empty when only part of keywords matched", () => {
+    const chats = [buildChat({ id: 1, title: "系统设计", model: "deepseek-v3" })];
+
+    const result = filterChats(chats, {
+      keyword: "系统 命中率",
+      tagFilter: TAG_FILTER_ALL,
+      pinnedOnly: false,
+      messageIndex: {
+        1: "仅包含架构相关内容",
+      },
+    });
+
+    expect(result).toHaveLength(0);
+  });
+
+  it("normalizes case and extra spaces for multi-keyword matching", () => {
+    const chats = [buildChat({ id: 1, title: "Cache 命中", model: "DeepSeek-V3" })];
+
+    const result = filterChats(chats, {
+      keyword: "  cache   deepseek-v3 ",
+      tagFilter: TAG_FILTER_ALL,
+      pinnedOnly: false,
+      messageIndex: {},
+    });
+
+    expect(result.map((chat) => chat.id)).toEqual([1]);
+  });
+
   it("supports untagged filter with invalid tag values", () => {
     const chats = [
       buildChat({ id: 1, tagId: "work" }),

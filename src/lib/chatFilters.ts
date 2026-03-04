@@ -29,20 +29,27 @@ const isChatMatchedByTag = (chat: ChatModel, tagFilter: ChatTagFilter) => {
   return normalizeChatTagId(chat.tagId) === tagFilter;
 };
 
+// Split keyword by whitespace and normalize casing for stable "multi-keyword AND" search.
+// Edge case: empty/blank keyword should return an empty token list.
+const splitKeywordTokens = (keyword: string): string[] => {
+  const normalizedKeyword = normalizeSearchText(keyword);
+  if (!normalizedKeyword) return [];
+  return normalizedKeyword.split(/\s+/).filter(Boolean);
+};
+
 const isChatMatchedByKeyword = (
   chat: ChatModel,
-  keyword: string,
+  searchTokens: string[],
   messageIndex: Record<number, string>
 ) => {
-  if (!keyword) return true;
-  const normalizedKeyword = normalizeSearchText(keyword);
-  if (!normalizedKeyword) return true;
-  const messageText = normalizeSearchText(messageIndex[chat.id] ?? "");
-  return (
-    normalizeSearchText(chat.title).includes(normalizedKeyword) ||
-    normalizeSearchText(chat.model).includes(normalizedKeyword) ||
-    messageText.includes(normalizedKeyword)
-  );
+  if (searchTokens.length === 0) return true;
+  // Combine all searchable fields so each token can match title/model/message in any position.
+  const searchableText = [
+    normalizeSearchText(chat.title),
+    normalizeSearchText(chat.model),
+    normalizeSearchText(messageIndex[chat.id] ?? ""),
+  ].join(" ");
+  return searchTokens.every((token) => searchableText.includes(token));
 };
 
 // Compose pinned/tag/keyword rules in a single pass for sidebar rendering.
@@ -51,11 +58,11 @@ export const filterChats = (
   options: ChatFilterOptions
 ): ChatModel[] => {
   const normalizedTagFilter = normalizeTagFilterValue(options.tagFilter);
-  const normalizedKeyword = normalizeSearchText(options.keyword);
+  const searchTokens = splitKeywordTokens(options.keyword);
   return chats.filter((chat) => {
     if (options.pinnedOnly && !chat.pinned) return false;
     if (!isChatMatchedByTag(chat, normalizedTagFilter)) return false;
-    return isChatMatchedByKeyword(chat, normalizedKeyword, options.messageIndex);
+    return isChatMatchedByKeyword(chat, searchTokens, options.messageIndex);
   });
 };
 

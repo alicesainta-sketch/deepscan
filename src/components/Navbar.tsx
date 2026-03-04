@@ -743,7 +743,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
-                placeholder="搜索标题、模型或消息..."
+                placeholder="搜索（支持空格多关键词）..."
                 className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-8 text-sm text-slate-700 outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-slate-500"
               />
               {keyword ? (
