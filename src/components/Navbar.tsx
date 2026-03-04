@@ -15,7 +15,14 @@ import {
 } from "@/lib/chatStore";
 import type { ChatExportPayload } from "@/lib/chatStore";
 import { getStoredMessagesText } from "@/lib/chatMessageStorage";
-import { CHAT_TAGS, getChatTagById, normalizeChatTagId } from "@/lib/chatTags";
+import { CHAT_TAGS, getChatTagById } from "@/lib/chatTags";
+import {
+  TAG_FILTER_ALL,
+  TAG_FILTER_UNTAGGED,
+  buildTagFilterCounts,
+  filterChats,
+  normalizeTagFilterValue,
+} from "@/lib/chatFilters";
 import { normalizeSearchText } from "@/lib/searchUtils";
 import type { ChatModel } from "@/types/chat";
 import ChatBulkActions from "@/components/ChatBulkActions";
@@ -52,16 +59,7 @@ type ChatGroup = {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TAG_FILTER_STORAGE_KEY = "deepscan:chat-tag-filter";
-const TAG_FILTER_ALL = "all";
-const TAG_FILTER_UNTAGGED = "untagged";
-
-const normalizeTagFilterValue = (value: unknown): string => {
-  if (value === TAG_FILTER_ALL || value === TAG_FILTER_UNTAGGED) {
-    return value;
-  }
-  const normalized = normalizeChatTagId(value);
-  return normalized ?? TAG_FILTER_ALL;
-};
+const PINNED_ONLY_STORAGE_KEY = "deepscan:chat-pinned-only";
 
 const groupChatsByRecency = (chats: ChatModel[]): ChatGroup[] => {
   const now = Date.now();
@@ -121,12 +119,14 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
   const [activeTagFilter, setActiveTagFilter] = React.useState<string>(
     TAG_FILTER_ALL
   );
+  const [pinnedOnly, setPinnedOnly] = React.useState(false);
   const [selectedChatIds, setSelectedChatIds] = React.useState<Set<number>>(
     () => new Set()
   );
   // Defer search filtering work to keep typing responsive with large histories.
   const deferredKeyword = React.useDeferredValue(keyword);
   const importInputRef = React.useRef<HTMLInputElement>(null);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     if (!collapsed) return;
@@ -157,6 +157,30 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     );
   }, [activeTagFilter]);
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    setPinnedOnly(localStorage.getItem(PINNED_ONLY_STORAGE_KEY) === "1");
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(PINNED_ONLY_STORAGE_KEY, pinnedOnly ? "1" : "0");
+  }, [pinnedOnly]);
+
+  React.useEffect(() => {
+    // Keep a global quick key for focusing chat search in the sidebar.
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      const isMod = event.metaKey || event.ctrlKey;
+      if (!isMod || event.key.toLowerCase() !== "k") return;
+      if (collapsed) return;
+      event.preventDefault();
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    };
+    window.addEventListener("keydown", handleWindowKeyDown);
+    return () => window.removeEventListener("keydown", handleWindowKeyDown);
+  }, [collapsed]);
+
   const shouldLoadChats = !pathname.startsWith("/sign-in");
 
   const {
@@ -185,45 +209,15 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
   }, [chats, deferredKeyword, shouldLoadChats]);
 
   const filteredChats = React.useMemo(() => {
-    const normalizedKeyword = normalizeSearchText(deferredKeyword);
-    const normalizedTagFilter = normalizeTagFilterValue(activeTagFilter);
-    return chats.filter((chat) => {
-      // Compose tag and keyword filters so users can narrow down in one pass.
-      const isTagMatched =
-        normalizedTagFilter === TAG_FILTER_ALL
-          ? true
-          : normalizedTagFilter === TAG_FILTER_UNTAGGED
-            ? !chat.tagId
-            : chat.tagId === normalizedTagFilter;
-      if (!isTagMatched) return false;
-      if (!normalizedKeyword) return true;
-      const messageText = normalizeSearchText(messageIndex[chat.id] ?? "");
-      return (
-        normalizeSearchText(chat.title).includes(normalizedKeyword) ||
-        normalizeSearchText(chat.model).includes(normalizedKeyword) ||
-        messageText.includes(normalizedKeyword)
-      );
+    return filterChats(chats, {
+      keyword: deferredKeyword,
+      tagFilter: activeTagFilter,
+      pinnedOnly,
+      messageIndex,
     });
-  }, [activeTagFilter, chats, deferredKeyword, messageIndex]);
+  }, [activeTagFilter, chats, deferredKeyword, messageIndex, pinnedOnly]);
 
-  const tagFilterCounts = React.useMemo(() => {
-    const nextCounts: Record<string, number> = {
-      [TAG_FILTER_ALL]: chats.length,
-      [TAG_FILTER_UNTAGGED]: 0,
-    };
-    CHAT_TAGS.forEach((tag) => {
-      nextCounts[tag.id] = 0;
-    });
-    chats.forEach((chat) => {
-      const normalizedTagId = normalizeChatTagId(chat.tagId);
-      if (!normalizedTagId) {
-        nextCounts[TAG_FILTER_UNTAGGED] += 1;
-        return;
-      }
-      nextCounts[normalizedTagId] += 1;
-    });
-    return nextCounts;
-  }, [chats]);
+  const tagFilterCounts = React.useMemo(() => buildTagFilterCounts(chats), [chats]);
 
   const groupedFilteredChats = React.useMemo(
     () => groupChatsByRecency(filteredChats),
@@ -714,13 +708,27 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
               历史对话
             </p>
-            <button
-              type="button"
-              onClick={handleToggleBulkMode}
-              className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              {bulkMode ? "退出批量" : "批量操作"}
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPinnedOnly((prev) => !prev)}
+                className={`rounded-md border px-2 py-1 text-[11px] transition ${
+                  pinnedOnly
+                    ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                }`}
+                title="仅看置顶"
+              >
+                仅置顶
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleBulkMode}
+                className="rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                {bulkMode ? "退出批量" : "批量操作"}
+              </button>
+            </div>
           </div>
           <div className="px-3 pt-2">
             <label className="relative block">
@@ -730,6 +738,7 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                 aria-hidden
               />
               <input
+                ref={searchInputRef}
                 type="text"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}

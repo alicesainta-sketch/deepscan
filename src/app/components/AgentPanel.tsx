@@ -193,6 +193,8 @@ interface AgentPanelProps {
   embeddingCount: number;
   embeddingAvailable: boolean;
   onRebuildEmbeddings: () => void;
+  onRetryFailedStep?: (runId: string) => void;
+  retryingRunId?: string | null;
   onClose?: () => void;
   isOverlay?: boolean;
 }
@@ -215,6 +217,8 @@ export default function AgentPanel({
   embeddingCount,
   embeddingAvailable,
   onRebuildEmbeddings,
+  onRetryFailedStep,
+  retryingRunId,
   onClose,
   isOverlay = false,
 }: AgentPanelProps) {
@@ -257,6 +261,9 @@ export default function AgentPanel({
     () => runs.find((run) => run.id === activeRunId) ?? runs[0],
     [runs, activeRunId]
   );
+  const canRetryActiveRun =
+    Boolean(activeRun && activeRun.steps.some((step) => step.status === "failed")) &&
+    Boolean(onRetryFailedStep);
 
   const previewMatchCount = useMemo(() => {
     if (!previewDocument) return 0;
@@ -673,9 +680,28 @@ export default function AgentPanel({
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-          步骤详情
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+            步骤详情
+          </p>
+          {onRetryFailedStep ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (activeRun) {
+                  onRetryFailedStep(activeRun.id);
+                }
+              }}
+              disabled={
+                !canRetryActiveRun ||
+                (activeRun ? retryingRunId === activeRun.id : false)
+              }
+              className="rounded-md border border-slate-200 px-2 py-1 text-[10px] text-slate-500 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              {activeRun && retryingRunId === activeRun.id ? "重试中..." : "重试失败步骤"}
+            </button>
+          ) : null}
+        </div>
         {!activeRun ? (
           <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
             选择一条运行记录查看细节。

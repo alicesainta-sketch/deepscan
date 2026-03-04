@@ -44,6 +44,14 @@ import {
   validateAgentOutput,
 } from "@/lib/agentRuntime";
 import {
+  AGENT_STEP_DRAFT,
+  AGENT_STEP_SEARCH,
+  AGENT_STEP_VALIDATE,
+  buildAgentRetryPlan,
+  hasFailedStep,
+  mapSearchStepDetailsToResults,
+} from "@/lib/agentRetry";
+import {
   clearAgentRuns,
   loadAgentRuns,
   saveAgentRuns,
@@ -64,6 +72,11 @@ import {
   getChatMessagesStorageKey,
   readStoredMessages,
 } from "@/lib/chatMessageStorage";
+import {
+  clearChatInputDraft,
+  readChatInputDraft,
+  writeChatInputDraft,
+} from "@/lib/chatDraftStorage";
 import { createLocalChat, getChatScope, updateLocalChat } from "@/lib/chatStore";
 import {
   createKnowledgeDocumentsFromFiles,
@@ -157,6 +170,7 @@ function ChatSession({
   });
   const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
   const [activeAgentRunId, setActiveAgentRunId] = useState<string | null>(null);
+  const [retryingRunId, setRetryingRunId] = useState<string | null>(null);
   const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>([]);
   const [embeddingChunks, setEmbeddingChunks] = useState<KnowledgeChunk[]>([]);
   const [embeddingStatus, setEmbeddingStatus] = useState<
@@ -323,6 +337,17 @@ function ChatSession({
   }, []);
 
   useEffect(() => {
+    // Restore unsent draft input when switching between chat sessions.
+    setInput(readChatInputDraft(sessionId));
+    setEditTarget(null);
+  }, [sessionId]);
+
+  useEffect(() => {
+    // Persist unsent draft so accidental refresh won't lose user input.
+    writeChatInputDraft(sessionId, input);
+  }, [input, sessionId]);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
@@ -437,6 +462,7 @@ function ChatSession({
     const storedRuns = loadAgentRuns(sessionId);
     setAgentRuns(storedRuns);
     setActiveAgentRunId(storedRuns[0]?.id ?? null);
+    setRetryingRunId(null);
     pendingAgentRunIdRef.current = null;
     pendingAgentDraftStepIdRef.current = null;
   }, [sessionId]);
@@ -502,6 +528,8 @@ function ChatSession({
             JSON.stringify(messages ?? [])
           );
           localStorage.removeItem(getChatMessagesStorageKey(sessionId));
+          clearChatInputDraft(sessionId);
+          clearChatInputDraft(newSessionId);
           // Move draft agent runs along with the chat history.
           const draftRuns = loadAgentRuns(sessionId);
           if (draftRuns.length > 0) {
@@ -622,6 +650,83 @@ function ChatSession({
     }
   };
 
+  // Execute the code-search step and return results/context metadata for later steps.
+  const executeAgentSearch = async (params: {
+    run: AgentRun;
+    searchStepId: string;
+    prompt: string;
+  }) => {
+    let nextRun = params.run;
+    let searchResults: KnowledgeSearchResult[] = [];
+    let usedEmbeddings = false;
+
+    if (knowledgeDocs.length === 0) {
+      nextRun = attachSearchFailure(nextRun, params.searchStepId, "资料库为空");
+      return { nextRun, searchResults };
+    }
+
+    if (
+      agentSettings.enableEmbeddings &&
+      providerConfig.mode === "openai-compatible" &&
+      embeddingChunks.length > 0
+    ) {
+      try {
+        searchResults = await searchKnowledgeEmbeddings({
+          query: params.prompt,
+          chunks: embeddingChunks,
+          config: providerConfig,
+          model: agentSettings.embeddingModel,
+          topK: agentSettings.maxSearchResults,
+        });
+        usedEmbeddings = searchResults.length > 0;
+      } catch (error) {
+        setEmbeddingStatus("error");
+        setEmbeddingError(
+          error instanceof Error ? error.message : "向量检索失败，已回退关键词"
+        );
+        usedEmbeddings = false;
+      }
+    }
+
+    if (!usedEmbeddings) {
+      searchResults = searchKnowledgeDocuments(
+        knowledgeDocs,
+        params.prompt,
+        agentSettings.maxSearchResults
+      );
+    }
+
+    nextRun = attachSearchResults(nextRun, params.searchStepId, searchResults);
+    const modeLabel = usedEmbeddings ? "向量检索" : "关键词检索";
+    nextRun = updateAgentRunStep(nextRun, params.searchStepId, {
+      outputSummary: `${modeLabel} · 命中 ${searchResults.length} 个片段`,
+    });
+    return { nextRun, searchResults };
+  };
+
+  const enqueueAgentRequest = (params: {
+    runId: string;
+    prompt: string;
+    planSummary: string;
+    searchResults: KnowledgeSearchResult[];
+  }) => {
+    const context = buildAgentContext({
+      docs: knowledgeDocs,
+      results: params.searchResults,
+      settings: agentSettings,
+    });
+    const instruction = buildAgentInstruction(agentSettings);
+    const metadata: AgentMessageMetadata = {
+      agent: {
+        enabled: true,
+        runId: params.runId,
+        context: `${instruction}\n\n${context}`,
+        planSummary: params.planSummary,
+      },
+    };
+    sendMessage({ text: params.prompt, metadata }, { body: { model } });
+  };
+
   const handleAgentSubmit = async (prompt: string) => {
     // Agent 模式下：先创建运行记录，再拼接上下文发送给模型。
     const run = createAgentRun({
@@ -629,8 +734,8 @@ function ChatSession({
       prompt,
       settings: agentSettings,
     });
-    const searchStep = getStepByTitle(run, "本地代码检索");
-    const draftingStep = getStepByTitle(run, "生成修改方案");
+    const searchStep = getStepByTitle(run, AGENT_STEP_SEARCH);
+    const draftingStep = getStepByTitle(run, AGENT_STEP_DRAFT);
 
     if (!searchStep || !draftingStep) {
       return;
@@ -642,70 +747,87 @@ function ChatSession({
     setAgentRuns((prev) => [run, ...prev]);
     setActiveAgentRunId(run.id);
 
-    let nextRun = run;
-    let searchResults: KnowledgeSearchResult[] = [];
-    let usedEmbeddings = false;
-
-    if (knowledgeDocs.length === 0) {
-      nextRun = attachSearchFailure(nextRun, searchStep.id, "资料库为空");
-    } else {
-      if (
-        agentSettings.enableEmbeddings &&
-        providerConfig.mode === "openai-compatible" &&
-        embeddingChunks.length > 0
-      ) {
-        try {
-          searchResults = await searchKnowledgeEmbeddings({
-            query: prompt,
-            chunks: embeddingChunks,
-            config: providerConfig,
-            model: agentSettings.embeddingModel,
-            topK: agentSettings.maxSearchResults,
-          });
-          usedEmbeddings = searchResults.length > 0;
-        } catch (error) {
-          setEmbeddingStatus("error");
-          setEmbeddingError(
-            error instanceof Error ? error.message : "向量检索失败，已回退关键词"
-          );
-          usedEmbeddings = false;
-        }
-      }
-
-      if (!usedEmbeddings) {
-        searchResults = searchKnowledgeDocuments(
-          knowledgeDocs,
-          prompt,
-          agentSettings.maxSearchResults
-        );
-      }
-
-      nextRun = attachSearchResults(nextRun, searchStep.id, searchResults);
-      const modeLabel = usedEmbeddings ? "向量检索" : "关键词检索";
-      nextRun = updateAgentRunStep(nextRun, searchStep.id, {
-        outputSummary: `${modeLabel} · 命中 ${searchResults.length} 个片段`,
-      });
-    }
+    const searchOutcome = await executeAgentSearch({
+      run,
+      searchStepId: searchStep.id,
+      prompt,
+    });
+    let nextRun = searchOutcome.nextRun;
 
     nextRun = startDraftingStep(nextRun, draftingStep.id);
     updateAgentRun(run.id, nextRun);
 
-    const context = buildAgentContext({
-      docs: knowledgeDocs,
-      results: searchResults,
-      settings: agentSettings,
+    enqueueAgentRequest({
+      runId: run.id,
+      prompt,
+      planSummary: run.title,
+      searchResults: searchOutcome.searchResults,
     });
-    const instruction = buildAgentInstruction(agentSettings);
-    const metadata: AgentMessageMetadata = {
-      agent: {
-        enabled: true,
-        runId: run.id,
-        context: `${instruction}\n\n${context}`,
-        planSummary: run.title,
-      },
-    };
+  };
 
-    sendMessage({ text: prompt, metadata }, { body: { model } });
+  const handleRetryFailedStep = async (runId: string) => {
+    if (isLoading) return;
+    const targetRun = agentRuns.find((run) => run.id === runId);
+    if (!targetRun) return;
+
+    const retryPlan = buildAgentRetryPlan(targetRun);
+    if (retryPlan.mode === "none") return;
+
+    setRetryingRunId(runId);
+    setActiveAgentRunId(runId);
+
+    if (retryPlan.mode === "search") {
+      let retryingRun = updateAgentRunStep(targetRun, retryPlan.failedStepId, {
+        status: "running",
+        startedAt: Date.now(),
+        endedAt: undefined,
+        error: undefined,
+        outputSummary: "重试中…",
+      });
+      retryingRun = finalizeAgentRun(retryingRun, "running");
+      updateAgentRun(runId, retryingRun);
+
+      const searchOutcome = await executeAgentSearch({
+        run: retryingRun,
+        searchStepId: retryPlan.failedStepId,
+        prompt: targetRun.prompt,
+      });
+      const nextStatus = hasFailedStep(searchOutcome.nextRun) ? "failed" : "success";
+      const finalizedRun = finalizeAgentRun(searchOutcome.nextRun, nextStatus);
+      updateAgentRun(runId, finalizedRun);
+      setRetryingRunId(null);
+      return;
+    }
+
+    const searchStep = getStepByTitle(targetRun, AGENT_STEP_SEARCH);
+    const recoveredSearchResults = mapSearchStepDetailsToResults(searchStep);
+    let retryingRun = updateAgentRunStep(targetRun, retryPlan.draftStepId, {
+      status: "running",
+      startedAt: Date.now(),
+      endedAt: undefined,
+      error: undefined,
+      outputSummary: "重试中…",
+    });
+    if (retryPlan.validationStepId) {
+      retryingRun = updateAgentRunStep(retryingRun, retryPlan.validationStepId, {
+        status: "pending",
+        endedAt: undefined,
+        error: undefined,
+        outputSummary: undefined,
+        details: undefined,
+      });
+    }
+    retryingRun = finalizeAgentRun(retryingRun, "running");
+    updateAgentRun(runId, retryingRun);
+
+    pendingAgentRunIdRef.current = runId;
+    pendingAgentDraftStepIdRef.current = retryPlan.draftStepId;
+    enqueueAgentRequest({
+      runId,
+      prompt: targetRun.prompt,
+      planSummary: targetRun.title,
+      searchResults: recoveredSearchResults,
+    });
   };
 
   useEffect(() => {
@@ -724,6 +846,7 @@ function ChatSession({
       updateAgentRun(pendingRunId, finalized);
       pendingAgentRunIdRef.current = null;
       pendingAgentDraftStepIdRef.current = null;
+      setRetryingRunId(null);
       return;
     }
 
@@ -735,7 +858,7 @@ function ChatSession({
     if (!assistantMessage) return;
 
     const responseText = getMessageText(assistantMessage);
-    const validationStep = getStepByTitle(targetRun, "结果验收");
+    const validationStep = getStepByTitle(targetRun, AGENT_STEP_VALIDATE);
     // Validate structured output to expose missing fields in the Agent panel.
     const validation = validateAgentOutput(responseText);
     const fallbackSummary = summarizeAssistantResponse(responseText);
@@ -762,6 +885,7 @@ function ChatSession({
     updateAgentRun(pendingRunId, nextRun);
     pendingAgentRunIdRef.current = null;
     pendingAgentDraftStepIdRef.current = null;
+    setRetryingRunId(null);
   }, [
     agentRuns,
     error,
@@ -898,6 +1022,10 @@ function ChatSession({
     onRebuildEmbeddings: () => {
       void handleRebuildEmbeddings();
     },
+    onRetryFailedStep: (runId: string) => {
+      void handleRetryFailedStep(runId);
+    },
+    retryingRunId,
   };
 
   return (
