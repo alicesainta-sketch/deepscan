@@ -15,7 +15,7 @@ import {
 } from "@/lib/chatStore";
 import type { ChatExportPayload } from "@/lib/chatStore";
 import { getStoredMessagesText } from "@/lib/chatMessageStorage";
-import { CHAT_TAGS, getChatTagById } from "@/lib/chatTags";
+import { CHAT_TAGS, getChatTagById, normalizeChatTagId } from "@/lib/chatTags";
 import { normalizeSearchText } from "@/lib/searchUtils";
 import type { ChatModel } from "@/types/chat";
 import ChatBulkActions from "@/components/ChatBulkActions";
@@ -51,6 +51,17 @@ type ChatGroup = {
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const TAG_FILTER_STORAGE_KEY = "deepscan:chat-tag-filter";
+const TAG_FILTER_ALL = "all";
+const TAG_FILTER_UNTAGGED = "untagged";
+
+const normalizeTagFilterValue = (value: unknown): string => {
+  if (value === TAG_FILTER_ALL || value === TAG_FILTER_UNTAGGED) {
+    return value;
+  }
+  const normalized = normalizeChatTagId(value);
+  return normalized ?? TAG_FILTER_ALL;
+};
 
 const groupChatsByRecency = (chats: ChatModel[]): ChatGroup[] => {
   const now = Date.now();
@@ -107,6 +118,9 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
   const [busyChatId, setBusyChatId] = React.useState<number | null>(null);
   const [bulkMode, setBulkMode] = React.useState(false);
   const [bulkBusy, setBulkBusy] = React.useState(false);
+  const [activeTagFilter, setActiveTagFilter] = React.useState<string>(
+    TAG_FILTER_ALL
+  );
   const [selectedChatIds, setSelectedChatIds] = React.useState<Set<number>>(
     () => new Set()
   );
@@ -126,6 +140,22 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
     // 批量操作与标签编辑互斥，避免交互冲突。
     setTaggingChatId(null);
   }, [bulkMode]);
+
+  React.useEffect(() => {
+    // Restore the last selected tag filter for a stable sidebar experience.
+    if (typeof window === "undefined") return;
+    const storedValue = localStorage.getItem(TAG_FILTER_STORAGE_KEY);
+    if (!storedValue) return;
+    setActiveTagFilter(normalizeTagFilterValue(storedValue));
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(
+      TAG_FILTER_STORAGE_KEY,
+      normalizeTagFilterValue(activeTagFilter)
+    );
+  }, [activeTagFilter]);
 
   const shouldLoadChats = !pathname.startsWith("/sign-in");
 
@@ -156,8 +186,17 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
 
   const filteredChats = React.useMemo(() => {
     const normalizedKeyword = normalizeSearchText(deferredKeyword);
-    if (!normalizedKeyword) return chats;
+    const normalizedTagFilter = normalizeTagFilterValue(activeTagFilter);
     return chats.filter((chat) => {
+      // Compose tag and keyword filters so users can narrow down in one pass.
+      const isTagMatched =
+        normalizedTagFilter === TAG_FILTER_ALL
+          ? true
+          : normalizedTagFilter === TAG_FILTER_UNTAGGED
+            ? !chat.tagId
+            : chat.tagId === normalizedTagFilter;
+      if (!isTagMatched) return false;
+      if (!normalizedKeyword) return true;
       const messageText = normalizeSearchText(messageIndex[chat.id] ?? "");
       return (
         normalizeSearchText(chat.title).includes(normalizedKeyword) ||
@@ -165,7 +204,26 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
         messageText.includes(normalizedKeyword)
       );
     });
-  }, [chats, deferredKeyword, messageIndex]);
+  }, [activeTagFilter, chats, deferredKeyword, messageIndex]);
+
+  const tagFilterCounts = React.useMemo(() => {
+    const nextCounts: Record<string, number> = {
+      [TAG_FILTER_ALL]: chats.length,
+      [TAG_FILTER_UNTAGGED]: 0,
+    };
+    CHAT_TAGS.forEach((tag) => {
+      nextCounts[tag.id] = 0;
+    });
+    chats.forEach((chat) => {
+      const normalizedTagId = normalizeChatTagId(chat.tagId);
+      if (!normalizedTagId) {
+        nextCounts[TAG_FILTER_UNTAGGED] += 1;
+        return;
+      }
+      nextCounts[normalizedTagId] += 1;
+    });
+    return nextCounts;
+  }, [chats]);
 
   const groupedFilteredChats = React.useMemo(
     () => groupChatsByRecency(filteredChats),
@@ -690,6 +748,56 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
                 </button>
               ) : null}
             </label>
+          </div>
+          <div className="px-3 pt-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setActiveTagFilter(TAG_FILTER_ALL)}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] transition ${
+                  activeTagFilter === TAG_FILTER_ALL
+                    ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                }`}
+                aria-label="筛选全部标签"
+              >
+                全部
+                <span>{tagFilterCounts[TAG_FILTER_ALL]}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTagFilter(TAG_FILTER_UNTAGGED)}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] transition ${
+                  activeTagFilter === TAG_FILTER_UNTAGGED
+                    ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                }`}
+                aria-label="筛选未分类标签"
+              >
+                未分类
+                <span>{tagFilterCounts[TAG_FILTER_UNTAGGED]}</span>
+              </button>
+              {CHAT_TAGS.map((tag) => {
+                const isActive = activeTagFilter === tag.id;
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => setActiveTagFilter(tag.id)}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] transition ${
+                      isActive
+                        ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                    }`}
+                    aria-label={`筛选标签 ${tag.label}`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${tag.dotClass}`} />
+                    <span>{tag.label}</span>
+                    <span>{tagFilterCounts[tag.id] ?? 0}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           {bulkMode ? (
             <div className="px-3 pt-2">
