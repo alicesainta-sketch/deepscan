@@ -66,8 +66,10 @@ const loadLegacyDocuments = async (): Promise<KnowledgeDocument[]> => {
       request.onerror = () => reject(request.error);
     });
     db.close();
+    // Legacy schema might contain malformed payloads from old builds.
     return Array.isArray(result) ? result : [];
   } catch {
+    // Migration should be best-effort: fallback to empty state instead of blocking the app.
     return [];
   }
 };
@@ -78,6 +80,7 @@ export const loadKnowledgeDocuments = async (): Promise<KnowledgeDocument[]> => 
     const stored = (await get(STORAGE_KEY)) as KnowledgeDocument[] | undefined;
     if (Array.isArray(stored) && stored.length > 0) return stored;
 
+    // Only hit legacy DB when the new store is empty to avoid repeated migration reads.
     const legacyDocs = await loadLegacyDocuments();
     if (legacyDocs.length > 0) {
       await set(STORAGE_KEY, legacyDocs);
@@ -86,6 +89,7 @@ export const loadKnowledgeDocuments = async (): Promise<KnowledgeDocument[]> => 
 
     return Array.isArray(stored) ? stored : [];
   } catch {
+    // Read failures should not crash chat page initialization.
     return [];
   }
 };

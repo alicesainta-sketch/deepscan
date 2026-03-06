@@ -88,6 +88,7 @@ const normalizeChatsByScope = (sourceScopes: unknown) => {
 };
 
 const migrateStore = (raw: unknown): ChatStoreState => {
+  // Always normalize unknown/legacy payloads into the latest schema.
   if (!raw || typeof raw !== "object") return getDefaultState();
 
   const candidate = raw as {
@@ -104,6 +105,7 @@ const migrateStore = (raw: unknown): ChatStoreState => {
     typeof candidate.nextChatId === "number" && candidate.nextChatId > 0
       ? candidate.nextChatId
       : 1;
+  // Guard against stale nextChatId by recomputing from the max existing chat id.
   const nextChatId = Math.max(storedNextChatId, maxChatId + 1);
 
   if (storedVersion > CHAT_STORE_VERSION) {
@@ -122,6 +124,7 @@ const migrateStore = (raw: unknown): ChatStoreState => {
 const readStore = (): ChatStoreState => {
   if (typeof window === "undefined") return getDefaultState();
 
+  // Prefer the new key, but still support one-time read from legacy key.
   const raw = localStorage.getItem(CHAT_STORE_KEY);
   const legacyRaw = raw ? null : localStorage.getItem(LEGACY_CHAT_STORE_KEY);
   const source = raw ?? legacyRaw;
@@ -134,6 +137,7 @@ const readStore = (): ChatStoreState => {
     const storedVersion = coerceVersion(
       (parsed as { version?: unknown })?.version
     );
+    // Rewrite normalized data so future reads always hit the latest schema.
     if (legacyRaw || storedVersion !== CHAT_STORE_VERSION) {
       writeStore(migrated);
       if (legacyRaw) {
@@ -288,7 +292,7 @@ export const importLocalChats = async (
 
   const store = readStore();
   if (mode === "replace") {
-    // Replace mode should also clear existing message shards for this scope.
+    // Replace mode must remove old message shards; otherwise deleted chats can leak stale messages.
     (store.chatsByScope[scope] ?? []).forEach((chat) => {
       removeStoredMessages(String(chat.id));
     });
@@ -300,6 +304,7 @@ export const importLocalChats = async (
   const idMap = new Map<number, number>();
   const withFreshIds = importedChats.map((chat) => {
     const nextId = store.nextChatId++;
+    // Imported ids may collide with local ids, so remap to fresh ids and keep a lookup table for messages.
     idMap.set(chat.id, nextId);
     return {
       ...chat,
@@ -316,7 +321,7 @@ export const importLocalChats = async (
   writeStore(store);
 
   if (candidate.messagesByChatId && typeof candidate.messagesByChatId === "object") {
-    // Map messages from old chat ids to new ids after import.
+    // Rewrite message shards with remapped ids to keep chat-message linkage consistent.
     Object.entries(candidate.messagesByChatId as Record<string, unknown>).forEach(
       ([rawChatId, rawMessages]) => {
         const oldId = Number(rawChatId);

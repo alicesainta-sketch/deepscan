@@ -171,6 +171,7 @@ class OpenAICompatibleChatTransport implements ChatTransport<UIMessage> {
   async sendMessages(
     options: Parameters<ChatTransport<UIMessage>["sendMessages"]>[0]
   ) {
+    // Convert UI messages into OpenAI-compatible payload and keep streaming enabled.
     const headers = {
       "Content-Type": "application/json",
       ...buildHeaders(this.config),
@@ -228,6 +229,7 @@ class OpenAICompatibleChatTransport implements ChatTransport<UIMessage> {
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
 
+            // SSE events are separated by blank lines; keep a buffer for chunked network frames.
             let boundaryIndex = buffer.indexOf("\n\n");
             while (boundaryIndex !== -1) {
               const rawEvent = buffer.slice(0, boundaryIndex).trim();
@@ -242,6 +244,7 @@ class OpenAICompatibleChatTransport implements ChatTransport<UIMessage> {
                 const data = line.slice(5).trim();
                 if (!data) continue;
                 if (data === "[DONE]") {
+                  // Upstream stream completion marker: flush pending text and close.
                   flushTextEnd();
                   controller.enqueue({
                     type: "finish",
@@ -271,6 +274,7 @@ class OpenAICompatibleChatTransport implements ChatTransport<UIMessage> {
                 const delta = payload?.choices?.[0]?.delta?.content ?? "";
                 const nextFinishReason = payload?.choices?.[0]?.finish_reason;
                 if (nextFinishReason) {
+                  // Track the latest finish reason and emit once on stream end.
                   finishReason = nextFinishReason;
                 }
 
@@ -320,6 +324,9 @@ class LocalStorageChatTransport implements ChatTransport<UIMessage> {
     options: Parameters<ChatTransport<UIMessage>["sendMessages"]>[0]
   ) {
     const config = loadChatProviderConfig();
+    // Runtime mode switch:
+    // - openai-compatible: direct fetch + custom SSE parser
+    // - server: default transport via /api/chat
     const transport =
       config.mode === "openai-compatible"
         ? new OpenAICompatibleChatTransport(config)
@@ -332,6 +339,7 @@ class LocalStorageChatTransport implements ChatTransport<UIMessage> {
         ? options
         : {
             ...options,
+            // Inject Agent context only for the default transport path.
             messages: prepareMessagesForTransport(options.messages),
           };
     return transport.sendMessages(preparedOptions);
@@ -355,6 +363,7 @@ class LocalStorageChatTransport implements ChatTransport<UIMessage> {
 export const createChatTransport = (
   override?: Partial<ChatProviderConfig> | null
 ): ChatTransport<UIMessage> => {
+  // Allow temporary override transport (e.g. tests/preview) without mutating persisted config.
   if (override) {
     const config = normalizeConfig(override);
     return config.mode === "openai-compatible"

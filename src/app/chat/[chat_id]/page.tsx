@@ -249,6 +249,7 @@ function ChatSession({
 
   useEffect(() => {
     if (isLoading && requestStartRef.current === null) {
+      // Start timing for this request cycle and capture current message ids as baseline.
       requestStartRef.current = Date.now();
       firstTokenAtRef.current = null;
       activeAssistantIdRef.current = null;
@@ -256,6 +257,7 @@ function ChatSession({
     }
 
     if (!isLoading && requestStartRef.current !== null) {
+      // Streaming ended: finalize total duration + output size for the active assistant message.
       const activeId = activeAssistantIdRef.current;
       if (activeId) {
         const message = (messages ?? []).find((msg) => msg.id === activeId);
@@ -282,6 +284,7 @@ function ChatSession({
     if (!isLoading || !requestStartRef.current) return;
 
     if (!activeAssistantIdRef.current) {
+      // Detect the newly created assistant message for this generation round.
       const nextAssistant = (messages ?? []).find(
         (msg) =>
           msg.role === "assistant" && !knownMessageIdsRef.current.has(msg.id)
@@ -298,6 +301,7 @@ function ChatSession({
     if (getMessageText(activeMessage).length === 0) return;
 
     const now = Date.now();
+    // Record TTFT once when the first assistant token arrives.
     firstTokenAtRef.current = now;
     const ttftMs = now - requestStartRef.current;
     setMessageMetrics((prev) => ({
@@ -508,6 +512,8 @@ function ChatSession({
 
     draftPersistStateRef.current = "pending";
 
+    // Persist "new chat" draft only after we have a complete QA pair,
+    // then migrate draft-scoped artifacts to the real chat id.
     const persistDraft = async () => {
       const firstUserText = getFirstUserMessageText(messages);
       const title = (firstUserText || "新对话").slice(0, 40);
@@ -523,6 +529,7 @@ function ChatSession({
 
         const newSessionId = String(newChatId);
         if (typeof window !== "undefined") {
+          // Move message shard from draft key -> real chat key to keep history continuous.
           localStorage.setItem(
             getChatMessagesStorageKey(newSessionId),
             JSON.stringify(messages ?? [])
@@ -560,6 +567,7 @@ function ChatSession({
         if (persistRetryTimerRef.current) {
           clearTimeout(persistRetryTimerRef.current);
         }
+        // Retry with backoff-like delay to tolerate transient local write failures.
         persistRetryTimerRef.current = setTimeout(() => {
           setPersistRetryTick((prev) => prev + 1);
         }, DRAFT_PERSIST_RETRY_DELAY_MS);
@@ -684,11 +692,13 @@ function ChatSession({
         setEmbeddingError(
           error instanceof Error ? error.message : "向量检索失败，已回退关键词"
         );
+        // Never block answering because of embedding failures.
         usedEmbeddings = false;
       }
     }
 
     if (!usedEmbeddings) {
+      // Fallback path keeps Agent usable even when embeddings are disabled/unavailable.
       searchResults = searchKnowledgeDocuments(
         knowledgeDocs,
         params.prompt,
@@ -872,6 +882,7 @@ function ChatSession({
     );
 
     if (validationStep) {
+      // Persist validation result so the panel can surface structured-output quality.
       nextRun = updateAgentRunStep(nextRun, validationStep.id, {
         status: validation.ok ? "success" : "failed",
         endedAt: Date.now(),

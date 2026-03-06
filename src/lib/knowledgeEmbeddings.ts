@@ -41,6 +41,7 @@ const splitIntoChunks = (
 ) => {
   const chunks: string[] = [];
   if (!content.trim()) return chunks;
+  // Keep overlap to preserve cross-boundary context for retrieval quality.
   const safeOverlap = Math.min(overlap, Math.max(0, size - 1));
   const step = size - safeOverlap;
   for (let start = 0; start < content.length; start += step) {
@@ -113,6 +114,7 @@ export const rebuildKnowledgeEmbeddings = async (params: {
   chunkOverlap?: number;
 }) => {
   const { docs, config, model, chunkSize, chunkOverlap } = params;
+  // Re-chunk all docs first so embedding cache can be atomically replaced.
   const baseChunks = createChunksFromDocs(docs, chunkSize, chunkOverlap);
   if (!baseChunks.length) {
     await set(EMBEDDING_STORAGE_KEY, []);
@@ -121,6 +123,7 @@ export const rebuildKnowledgeEmbeddings = async (params: {
 
   const embeddedChunks: KnowledgeChunk[] = [];
   for (let i = 0; i < baseChunks.length; i += EMBEDDING_BATCH_SIZE) {
+    // Batch requests to reduce payload size and avoid provider-side limits/timeouts.
     const batch = baseChunks.slice(i, i + EMBEDDING_BATCH_SIZE);
     const embeddings = await buildEmbeddingRequest(
       batch.map((chunk) => chunk.content),
@@ -175,6 +178,7 @@ export const searchKnowledgeEmbeddings = async (params: {
   const { query, chunks, config, model, topK } = params;
   if (!query.trim() || !chunks.length) return [];
 
+  // Single-query embedding + cosine similarity ranking over cached chunk vectors.
   const [queryEmbedding] = await buildEmbeddingRequest([query], config, model);
   if (!queryEmbedding) return [];
 
