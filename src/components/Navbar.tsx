@@ -209,14 +209,31 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
               <p className="text-xs text-slate-500 dark:text-slate-400">Claude 风格对话</p>
             </div>
           ) : null}
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            aria-label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
-            className="hidden rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition hover:bg-slate-100 md:inline-flex dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            {collapsed ? <IconChevronsRight size={16} aria-hidden /> : <IconChevronsLeft size={16} aria-hidden />}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+              aria-label={!isHydrated ? "切换主题" : theme === "dark" ? "切换到浅色" : "切换到深色"}
+              title={!isHydrated ? "切换主题" : theme === "dark" ? "切换到浅色" : "切换到深色"}
+            >
+              {!isHydrated ? (
+                <IconMoon size={14} aria-hidden />
+              ) : theme === "dark" ? (
+                <IconSun size={14} aria-hidden />
+              ) : (
+                <IconMoon size={14} aria-hidden />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              aria-label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
+              className="hidden rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition hover:bg-slate-100 md:inline-flex dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              {collapsed ? <IconChevronsRight size={16} aria-hidden /> : <IconChevronsLeft size={16} aria-hidden />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -382,23 +399,6 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
       </div>
 
       <div className={`border-t border-slate-200 p-3 dark:border-slate-700 ${collapsed ? "space-y-2" : "space-y-2"}`}>
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className={`flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white py-2 text-xs text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 ${
-            collapsed ? "px-0" : "px-2"
-          }`}
-          aria-label="切换主题"
-        >
-          {!isHydrated ? (
-            <IconMoon size={14} aria-hidden />
-          ) : theme === "dark" ? (
-            <IconSun size={14} aria-hidden />
-          ) : (
-            <IconMoon size={14} aria-hidden />
-          )}
-          {!collapsed ? <span>{theme === "dark" ? "切换到浅色" : "切换到深色"}</span> : null}
-        </button>
         {!collapsed ? (
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
             {userId ? `用户: ${userId}` : "访客模式"}
