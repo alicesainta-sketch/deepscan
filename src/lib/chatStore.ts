@@ -5,7 +5,6 @@ import {
   removeStoredMessages,
   writeStoredMessages,
 } from "@/lib/chatMessageStorage";
-import { normalizeChatTagId } from "@/lib/chatTags";
 
 const CHAT_STORE_KEY = "deepscan:chat-store";
 const LEGACY_CHAT_STORE_KEY = "deepscan:chat-store:v1";
@@ -36,8 +35,6 @@ const normalizeChat = (chat: Partial<ChatModel>, fallbackId: number): ChatModel 
   const now = Date.now();
   const createdAt = typeof chat.createdAt === "number" ? chat.createdAt : now;
   const updatedAt = typeof chat.updatedAt === "number" ? chat.updatedAt : createdAt;
-  // 统一清洗 tagId，避免导入或旧数据携带非法值。
-  const tagId = normalizeChatTagId((chat as { tagId?: unknown }).tagId);
   return {
     id: typeof chat.id === "number" ? chat.id : fallbackId,
     userId: typeof chat.userId === "string" ? chat.userId : "guest",
@@ -47,7 +44,7 @@ const normalizeChat = (chat: Partial<ChatModel>, fallbackId: number): ChatModel 
         ? chat.model
         : "deepseek-v3",
     pinned: Boolean(chat.pinned),
-    tagId,
+    tagId: null,
     createdAt,
     updatedAt,
   };
@@ -198,7 +195,6 @@ export const updateLocalChat = async (
     title?: string;
     pinned?: boolean;
     model?: "deepseek-v3" | "deepseek-r1";
-    tagId?: string | null;
   }
 ) => {
   const store = readStore();
@@ -210,9 +206,6 @@ export const updateLocalChat = async (
   const nextTitle =
     typeof payload.title === "string" ? payload.title.trim() : chat.title;
   if (!nextTitle) return null;
-  // tagId 允许显式置空，未传则保留原值。
-  const nextTagId =
-    payload.tagId === undefined ? chat.tagId : normalizeChatTagId(payload.tagId);
 
   const updated: ChatModel = {
     ...chat,
@@ -222,7 +215,7 @@ export const updateLocalChat = async (
       payload.model === "deepseek-r1" || payload.model === "deepseek-v3"
         ? payload.model
         : chat.model,
-    tagId: nextTagId,
+    tagId: null,
     updatedAt: Date.now(),
   };
 

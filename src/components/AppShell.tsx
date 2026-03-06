@@ -21,10 +21,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [collapsed, isHydrated]);
 
   return (
-    <div className="mx-auto flex h-screen w-full flex-col md:flex-row">
+    <div className="mx-auto flex h-screen w-full flex-col bg-[#faf9f5] md:flex-row dark:bg-slate-900">
       <aside
-        className={`h-60 w-full md:h-screen md:shrink-0 md:transition-[width] md:duration-200 ${
-          collapsed ? "md:w-[92px]" : "md:w-[320px]"
+        className={`h-56 w-full border-b border-slate-200/80 md:h-screen md:shrink-0 md:border-b-0 md:border-r md:border-slate-200/80 md:transition-[width] md:duration-200 dark:border-slate-700 ${
+          collapsed ? "md:w-[88px]" : "md:w-[300px]"
         }`}
       >
         <Navbar
@@ -37,7 +37,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           }
         />
       </aside>
-      <main className="flex-1 overflow-auto bg-white dark:bg-slate-900">{children}</main>
+      <main className="flex-1 overflow-auto">{children}</main>
     </div>
   );
 }
