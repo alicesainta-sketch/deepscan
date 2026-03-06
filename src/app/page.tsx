@@ -7,85 +7,49 @@ import { IconArrowRight } from "@/components/icons";
 export default function Home() {
   const router = useRouter();
   const [input, setInput] = useState("");
-  const [model, setModel] = useState("deepseek-v3");
-  const [isNavigating, setIsNavigating] = useState(false);
 
   const handleSubmit = () => {
     const question = input.trim();
-    if (!question || isNavigating) return;
-    setIsNavigating(true);
-    const query = new URLSearchParams({
-      q: question,
-      model,
-      draftId: Date.now().toString(36),
-    }).toString();
+    if (!question) return;
+    const query = new URLSearchParams({ q: question, auto: "1" }).toString();
     router.push(`/chat/new?${query}`);
   };
 
   return (
-    <div className="flex h-full items-start justify-center overflow-auto bg-[radial-gradient(circle_at_20%_20%,rgba(59,130,246,0.1),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(2,132,199,0.09),transparent_30%)] px-4 py-10 dark:bg-[radial-gradient(circle_at_20%_20%,rgba(56,189,248,0.18),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(59,130,246,0.16),transparent_30%)] md:items-center md:px-10">
-      <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-[0_14px_55px_-25px_rgba(15,23,42,.45)] backdrop-blur dark:border-slate-700 dark:bg-slate-900/90 dark:shadow-[0_20px_60px_-30px_rgba(2,6,23,.9)] md:p-7">
-        <div className="mb-4 space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-            New Chat
-          </p>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-            开始新的对话
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            输入你的问题，按 Enter 发送，Shift+Enter 换行。
-          </p>
-        </div>
+    <div className="flex h-full items-center justify-center overflow-auto bg-[#f4f2ec] px-4 py-8 dark:bg-slate-900 md:px-8">
+      <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_24px_60px_-35px_rgba(15,23,42,0.45)] dark:border-slate-700 dark:bg-slate-950 md:p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+          DeepScan Chat
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold text-slate-900 dark:text-slate-100">
+          用更专注的方式开始对话
+        </h1>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          模仿 Claude 的简洁体验，只保留核心聊天能力。
+        </p>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-800/70">
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-[#faf9f5] p-3 dark:border-slate-700 dark:bg-slate-900">
           <textarea
-            className="h-36 w-full resize-none rounded-xl border border-transparent bg-white px-4 py-3 text-slate-800 outline-none ring-0 transition focus:border-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-600"
-            placeholder="给 DeepSeek 发一条消息..."
             value={input}
-            disabled={isNavigating}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
                 handleSubmit();
               }
             }}
+            placeholder="你想讨论什么？"
+            className="h-36 w-full resize-none rounded-xl border border-transparent bg-white px-4 py-3 text-slate-800 outline-none transition focus:border-slate-200 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-700"
           />
-
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900">
-              <button
-                type="button"
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                  model === "deepseek-v3"
-                    ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                    : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                }`}
-                onClick={() => setModel("deepseek-v3")}
-              >
-                DeepSeek V3
-              </button>
-              <button
-                type="button"
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                  model === "deepseek-r1"
-                    ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                    : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                }`}
-                onClick={() => setModel("deepseek-r1")}
-              >
-                深度思考 R1
-              </button>
-            </div>
-
+          <div className="mt-3 flex items-center justify-between">
+            <p className="text-xs text-slate-500 dark:text-slate-400">Enter 发送，Shift + Enter 换行</p>
             <button
               type="button"
-              disabled={isNavigating || !input.trim()}
-              className="inline-flex items-center justify-center gap-1 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 dark:disabled:bg-slate-600 dark:disabled:text-slate-200"
               onClick={handleSubmit}
-              aria-label="创建对话"
+              disabled={!input.trim()}
+              className="inline-flex items-center gap-1 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 dark:disabled:bg-slate-700 dark:disabled:text-slate-300"
             >
-              {isNavigating ? "跳转中" : "发送并进入"}
+              开始对话
               <IconArrowRight size={16} aria-hidden />
             </button>
           </div>
