@@ -1,7 +1,6 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useAuth } from "@clerk/nextjs";
 import { useQueryClient } from "@tanstack/react-query";
 import type { UIMessage } from "ai";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -268,8 +267,7 @@ function HydratedChatSession({
   autoSend: boolean;
 }) {
   const isHydrated = useHydrated();
-  const { userId } = useAuth();
-  const chatScope = getChatScope(userId);
+  const chatScope = getChatScope();
 
   if (!isHydrated) {
     return (

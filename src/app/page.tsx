@@ -19,13 +19,13 @@ export default function Home() {
     <div className="flex h-full items-center justify-center overflow-auto bg-[#f4f2ec] px-4 py-8 dark:bg-slate-900 md:px-8">
       <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_24px_60px_-35px_rgba(15,23,42,0.45)] dark:border-slate-700 dark:bg-slate-950 md:p-8">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-          DeepScan Chat
+          DeepScan
         </p>
         <h1 className="mt-2 text-3xl font-semibold text-slate-900 dark:text-slate-100">
-          用更专注的方式开始对话
+          从一个问题开始，持续深入
         </h1>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          模仿 Claude 的简洁体验，只保留核心聊天能力。
+          专注核心聊天体验，让思考与回答更高效。
         </p>
 
         <div className="mt-6 rounded-2xl border border-slate-200 bg-[#faf9f5] p-3 dark:border-slate-700 dark:bg-slate-900">

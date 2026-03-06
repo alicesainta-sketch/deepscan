@@ -1,6 +1,5 @@
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -49,15 +48,13 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
-  const { userId } = useAuth();
   const { theme, isHydrated, toggleTheme } = useTheme();
-  const chatScope = getChatScope(userId);
+  const chatScope = getChatScope();
   const [editingChatId, setEditingChatId] = useState<number | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [busyChatId, setBusyChatId] = useState<number | null>(null);
   const [actionError, setActionError] = useState("");
 
-  const shouldLoadChats = !pathname.startsWith("/sign-in");
   const {
     data: chats = [],
     isLoading,
@@ -66,7 +63,6 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
   } = useQuery<ChatModel[]>({
     queryKey: ["chats", chatScope],
     queryFn: async () => listChats(chatScope),
-    enabled: shouldLoadChats,
     staleTime: 10_000,
     retry: 1,
   });
@@ -148,7 +144,6 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
   };
 
   const renderCollapsedList = () => {
-    if (!shouldLoadChats) return null;
     if (isLoading) {
       return (
         <div className="px-2 text-center text-xs text-slate-400 dark:text-slate-500">
@@ -269,13 +264,13 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
               </div>
             ) : null}
 
-            {shouldLoadChats && isLoading ? (
+            {isLoading ? (
               <div className="rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
                 正在加载会话...
               </div>
             ) : null}
 
-            {shouldLoadChats && isError ? (
+            {isError ? (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700 dark:border-red-700/70 dark:bg-red-900/30 dark:text-red-300">
                 <p>会话加载失败</p>
                 <button
@@ -290,7 +285,7 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
               </div>
             ) : null}
 
-            {shouldLoadChats && !isLoading && !isError && chatList.length === 0 ? (
+            {!isLoading && !isError && chatList.length === 0 ? (
               <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
                 暂无历史会话
               </div>
@@ -401,7 +396,7 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
       <div className={`border-t border-slate-200 p-3 dark:border-slate-700 ${collapsed ? "space-y-2" : "space-y-2"}`}>
         {!collapsed ? (
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            {userId ? `用户: ${userId}` : "访客模式"}
+            默认模式
           </p>
         ) : null}
       </div>

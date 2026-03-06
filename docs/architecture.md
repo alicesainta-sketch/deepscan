@@ -7,14 +7,13 @@
 - Tailwind CSS
 - React Query（会话列表缓存与刷新）
 - Vercel AI SDK（流式聊天）
-- Clerk（可选鉴权）
 
 ## 项目结构
 
 - `src/app`：页面与路由（含 `/api/chat` 服务端接口）。
 - `src/components`：全局壳层与侧边栏。
 - `src/app/components`：聊天页 UI 组件（输入、消息列表、错误展示）。
-- `src/lib`：核心逻辑（会话存储、消息解析、草稿/消息持久化）。
+- `src/lib`：核心逻辑（会话存储、消息解析、消息持久化）。
 - `src/types`：领域类型定义。
 - `src/proxy.ts`：请求拦截入口（替代 `middleware` 约定）。
 

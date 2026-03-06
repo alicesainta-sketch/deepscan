@@ -13,7 +13,6 @@ flowchart TD
     D --> F["main 内容区"]
     F --> G["/ -> 首页入口"]
     F --> H["/chat/[chat_id] -> 聊天页"]
-    F --> I["/sign-in/... -> 登录页"]
 ```
 
 源码定位：
