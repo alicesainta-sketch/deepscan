@@ -177,7 +177,7 @@ function ChatSession({
     "idle" | "building" | "ready" | "error"
   >("idle");
   const [embeddingError, setEmbeddingError] = useState("");
-  const [density, setDensity] = useState<"comfort" | "compact">(() => {
+  const [density] = useState<"comfort" | "compact">(() => {
     if (typeof window === "undefined") return "comfort";
     const stored = localStorage.getItem(DENSITY_STORAGE_KEY);
     return stored === "compact" ? "compact" : "comfort";
@@ -387,11 +387,6 @@ function ChatSession({
       JSON.stringify(messageFeedback)
     );
   }, [messageFeedback, sessionId]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem(DENSITY_STORAGE_KEY, density);
-  }, [density]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1004,10 +999,6 @@ function ChatSession({
       return { ...prev, [messageId]: value };
     });
   };
-  const handleToggleDensity = () => {
-    setDensity((prev) => (prev === "compact" ? "comfort" : "compact"));
-  };
-
   const handleToggleAgentPanelCollapsed = () => {
     setIsAgentPanelCollapsed((prev) => !prev);
   };
@@ -1046,11 +1037,6 @@ function ChatSession({
           status={isLoading ? "loading" : "idle"}
           model={model}
           onModelToggle={handleChangeModel}
-          agentEnabled={agentSettings.enabled}
-          onAgentToggle={handleToggleAgent}
-          onOpenAgentPanel={() => setIsAgentPanelOpen(true)}
-          density={density}
-          onDensityToggle={handleToggleDensity}
           onOpenSettings={() => setIsProviderSettingsOpen(true)}
           providerLabel={providerLabel}
         />

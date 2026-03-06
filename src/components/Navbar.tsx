@@ -518,41 +518,6 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
           >
             <IconPlus size={16} aria-hidden />
           </button>
-          <button
-            type="button"
-            className="flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-            onClick={() => {
-              void handleExportChats();
-            }}
-            aria-label="导出会话"
-            title="导出会话"
-          >
-            <IconDownload size={16} aria-hidden />
-          </button>
-          <button
-            type="button"
-            className="flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-            onClick={handleSelectImportFile}
-            aria-label="导入会话"
-            title="导入会话"
-          >
-            <IconUpload size={16} aria-hidden />
-          </button>
-          <button
-            type="button"
-            className="flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-            onClick={toggleTheme}
-            aria-label="切换亮暗色主题"
-            title={!isHydrated ? "切换主题" : theme === "dark" ? "切换到亮色" : "切换到暗色"}
-          >
-            {!isHydrated ? (
-              <IconMoon size={16} aria-hidden />
-            ) : theme === "dark" ? (
-              <IconSun size={16} aria-hidden />
-            ) : (
-              <IconMoon size={16} aria-hidden />
-            )}
-          </button>
         </div>
       );
     }
@@ -567,22 +532,59 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
           <IconPlus size={16} aria-hidden />
           创建新对话
         </button>
-        <button
-          type="button"
-          className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-          onClick={toggleTheme}
-          aria-label="切换亮暗色主题"
-        >
-          {!isHydrated ? (
-            <IconMoon size={16} aria-hidden />
-          ) : theme === "dark" ? (
-            <IconSun size={16} aria-hidden />
-          ) : (
-            <IconMoon size={16} aria-hidden />
-          )}
-          {!isHydrated ? "切换主题" : theme === "dark" ? "切换到亮色" : "切换到暗色"}
-        </button>
-        <div className="grid grid-cols-2 gap-2">
+      </div>
+    );
+  };
+
+  const renderUtilityActions = () => {
+    if (collapsed) {
+      return (
+        <div className="space-y-2 px-2">
+          <button
+            type="button"
+            className="flex h-9 w-full items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+            onClick={() => {
+              void handleExportChats();
+            }}
+            aria-label="导出会话"
+            title="导出会话"
+          >
+            <IconDownload size={14} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="flex h-9 w-full items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+            onClick={handleSelectImportFile}
+            aria-label="导入会话"
+            title="导入会话"
+          >
+            <IconUpload size={14} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="flex h-9 w-full items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+            onClick={toggleTheme}
+            aria-label="切换亮暗色主题"
+            title={!isHydrated ? "切换主题" : theme === "dark" ? "切换到亮色" : "切换到暗色"}
+          >
+            {!isHydrated ? (
+              <IconMoon size={14} aria-hidden />
+            ) : theme === "dark" ? (
+              <IconSun size={14} aria-hidden />
+            ) : (
+              <IconMoon size={14} aria-hidden />
+            )}
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="border-t border-slate-200 px-5 py-3 dark:border-slate-700">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+          工具
+        </p>
+        <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
             className="flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
@@ -600,6 +602,21 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
           >
             <IconUpload size={14} aria-hidden />
             导入
+          </button>
+          <button
+            type="button"
+            className="flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+            onClick={toggleTheme}
+            aria-label="切换亮暗色主题"
+          >
+            {!isHydrated ? (
+              <IconMoon size={14} aria-hidden />
+            ) : theme === "dark" ? (
+              <IconSun size={14} aria-hidden />
+            ) : (
+              <IconMoon size={14} aria-hidden />
+            )}
+            主题
           </button>
         </div>
       </div>
@@ -1112,6 +1129,8 @@ const Navbar = ({ collapsed, onToggleCollapse }: NavbarProps) => {
           </>
         )}
       </div>
+
+      {renderUtilityActions()}
 
       <div className={`border-t border-slate-200 py-3 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400 ${collapsed ? "px-2 text-center" : "px-5"}`}>
         {userId ? (
