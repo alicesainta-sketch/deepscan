@@ -4,7 +4,6 @@ import AppShell from "@/components/AppShell";
 import QueryClientProvider from "@/components/QueryClientProvider";
 import ThemeProvider from "@/components/ThemeProvider";
 import ThemeScript from "@/components/ThemeScript";
-import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   title: "DeepScan",
@@ -24,7 +23,6 @@ export default function RootLayout({
           <ThemeProvider>
             <AppShell>{children}</AppShell>
           </ThemeProvider>
-          <Analytics />
         </body>
       </html>
     </QueryClientProvider>

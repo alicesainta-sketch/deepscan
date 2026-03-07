@@ -7,10 +7,14 @@
 环境变量：
 - `DEEPSEEK_API_KEY`：模型 API Key
 - `BASE_URL`：OpenAI-compatible 接口地址（例如 `https://api.deepseek.com/v1`）
+- `NEXT_PUBLIC_AGENT_ADAPTER`：Agent adapter 模式（`mock` 或 `http`，默认 `mock`）
+- `NEXT_PUBLIC_AGENT_API_BASE_URL`：当 `NEXT_PUBLIC_AGENT_ADAPTER=http` 时使用的后端地址
+- `NEXT_PUBLIC_AGENT_TOOL_NAME`：HTTP 模式下默认工具名（默认 `deepscan.search`）
 
 注意：
 - 前端不直接暴露模型 Key。
 - 当前不依赖登录即可运行。
+- Agent 面板联调前至少配置 `NEXT_PUBLIC_AGENT_ADAPTER=http` 与 `NEXT_PUBLIC_AGENT_API_BASE_URL`。
 
 ## 规划中的分离后端配置（Go Gin）
 
