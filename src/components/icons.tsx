@@ -5,6 +5,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Download,
+  FlaskConical,
   MessageSquare,
   Moon,
   Pencil,
@@ -72,6 +73,7 @@ export const IconDownload = createIcon(Download, "Download");
 export const IconUpload = createIcon(Upload, "Upload");
 export const IconChevronsLeft = createIcon(ChevronsLeft, "ChevronsLeft");
 export const IconChevronsRight = createIcon(ChevronsRight, "ChevronsRight");
+export const IconFlask = createIcon(FlaskConical, "Flask");
 export const IconPin = createIcon(Pin, "Pin");
 export const IconPinOff = createIcon(PinOff, "PinOff");
 export const IconTag = createIcon(Tag, "Tag");

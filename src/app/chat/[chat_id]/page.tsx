@@ -9,6 +9,8 @@ import ErrorDisplay from "@/app/components/ErrorDisplay";
 import InputField from "@/app/components/InputField";
 import LoadingIndicator from "@/app/components/LoadingIndicator";
 import MessageList from "@/app/components/MessageList";
+import AgentMvpPanel from "@/app/components/AgentMvpPanel";
+import { IconFlask } from "@/components/icons";
 import { createLocalChat, getChatScope, updateLocalChat } from "@/lib/chatStore";
 import { getFirstUserMessageText } from "@/lib/chatMessages";
 import { readStoredMessages, writeStoredMessages } from "@/lib/chatMessageStorage";
@@ -45,6 +47,7 @@ function ChatSession({
   const sessionId = isDraftSession ? "draft:new" : routeChatId;
   const [input, setInput] = useState("");
   const [localActionError, setLocalActionError] = useState("");
+  const [showAgentPanel, setShowAgentPanel] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const hasAutoSentRef = useRef(false);
@@ -198,20 +201,36 @@ function ChatSession({
               {isLoading ? "Assistant 正在思考..." : "Ready"}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleRegenerate}
-            disabled={!lastAssistantMessageId || isLoading || isDraftSession}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            重新生成
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAgentPanel((prev) => !prev)}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition ${
+                showAgentPanel
+                  ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+              }`}
+              aria-label={showAgentPanel ? "收起 Agent MVP 面板" : "展开 Agent MVP 面板"}
+              title={showAgentPanel ? "收起 Agent MVP 面板" : "展开 Agent MVP 面板"}
+            >
+              <IconFlask size={15} aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={handleRegenerate}
+              disabled={!lastAssistantMessageId || isLoading || isDraftSession}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              重新生成
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="flex flex-1 flex-col overflow-hidden">
         <div className="flex-1 overflow-auto px-4 py-4 md:px-6">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+            {showAgentPanel ? <AgentMvpPanel /> : null}
             {error ? <ErrorDisplay error={error} onDismiss={clearError} /> : null}
             {localActionError ? <ErrorDisplay error={localActionError} /> : null}
 
