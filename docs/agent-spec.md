@@ -73,3 +73,19 @@
 
 - 前端只依赖 adapter 接口。
 - 后续切换到 Gin 后端时，仅替换 adapter 实现，不改状态机与测试用例语义。
+
+## 8. Adapter 模式切换（v0.2）
+
+- `mock`：本地演示模式，保留成功/超时/重试失败三条路径。
+- `http`：联调模式，调用后端 `POST /v1/mcp/tools/{tool_name}/invoke`。
+
+相关环境变量：
+
+- `NEXT_PUBLIC_AGENT_ADAPTER=mock|http`
+- `NEXT_PUBLIC_AGENT_API_BASE_URL`（http 模式必填）
+- `NEXT_PUBLIC_AGENT_TOOL_NAME`（可选，默认 `deepscan.search`）
+
+约束：
+
+- 状态机语义不随 adapter 模式变化。
+- 错误收敛仍由 runner 统一处理（`TOOL_TIMEOUT / UPSTREAM_ERROR / TOOL_RETRY_EXHAUSTED`）。
