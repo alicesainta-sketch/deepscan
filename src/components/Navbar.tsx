@@ -16,14 +16,11 @@ import {
   IconChevronsLeft,
   IconChevronsRight,
   IconMessage,
-  IconMoon,
   IconPencil,
   IconPlus,
-  IconSun,
   IconTrash,
   IconClose,
 } from "@/components/icons";
-import { useTheme } from "@/components/ThemeProvider";
 
 type NavbarProps = {
   collapsed: boolean;
@@ -48,7 +45,6 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
-  const { theme, isHydrated, toggleTheme } = useTheme();
   const chatScope = getChatScope();
   const [editingChatId, setEditingChatId] = useState<number | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
@@ -204,31 +200,14 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
               <p className="text-xs text-slate-500 dark:text-slate-400">Claude 风格对话</p>
             </div>
           ) : null}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-              aria-label={!isHydrated ? "切换主题" : theme === "dark" ? "切换到浅色" : "切换到深色"}
-              title={!isHydrated ? "切换主题" : theme === "dark" ? "切换到浅色" : "切换到深色"}
-            >
-              {!isHydrated ? (
-                <IconMoon size={14} aria-hidden />
-              ) : theme === "dark" ? (
-                <IconSun size={14} aria-hidden />
-              ) : (
-                <IconMoon size={14} aria-hidden />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={onToggleCollapse}
-              aria-label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
-              className="hidden rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition hover:bg-slate-100 md:inline-flex dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              {collapsed ? <IconChevronsRight size={16} aria-hidden /> : <IconChevronsLeft size={16} aria-hidden />}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
+            className="hidden rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition hover:bg-slate-100 md:inline-flex dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            {collapsed ? <IconChevronsRight size={16} aria-hidden /> : <IconChevronsLeft size={16} aria-hidden />}
+          </button>
         </div>
       </div>
 

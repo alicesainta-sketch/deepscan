@@ -10,7 +10,8 @@ import InputField from "@/app/components/InputField";
 import LoadingIndicator from "@/app/components/LoadingIndicator";
 import MessageList from "@/app/components/MessageList";
 import AgentMvpPanel from "@/app/components/AgentMvpPanel";
-import { IconFlask } from "@/components/icons";
+import { IconFlask, IconMoon, IconSun } from "@/components/icons";
+import { useTheme } from "@/components/ThemeProvider";
 import { createLocalChat, getChatScope, updateLocalChat } from "@/lib/chatStore";
 import { getFirstUserMessageText } from "@/lib/chatMessages";
 import { readStoredMessages, writeStoredMessages } from "@/lib/chatMessageStorage";
@@ -43,6 +44,7 @@ function ChatSession({
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { theme, isHydrated, toggleTheme } = useTheme();
   const isDraftSession = routeChatId === "new";
   const sessionId = isDraftSession ? "draft:new" : routeChatId;
   const [input, setInput] = useState("");
@@ -204,6 +206,21 @@ function ChatSession({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={toggleTheme}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+              aria-label={!isHydrated ? "切换主题" : theme === "dark" ? "切换到浅色" : "切换到深色"}
+              title={!isHydrated ? "切换主题" : theme === "dark" ? "切换到浅色" : "切换到深色"}
+            >
+              {!isHydrated ? (
+                <IconMoon size={14} aria-hidden />
+              ) : theme === "dark" ? (
+                <IconSun size={14} aria-hidden />
+              ) : (
+                <IconMoon size={14} aria-hidden />
+              )}
+            </button>
+            <button
+              type="button"
               onClick={() => setShowAgentPanel((prev) => !prev)}
               className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition ${
                 showAgentPanel
@@ -214,14 +231,6 @@ function ChatSession({
               title={showAgentPanel ? "收起 Agent MVP 面板" : "展开 Agent MVP 面板"}
             >
               <IconFlask size={15} aria-hidden />
-            </button>
-            <button
-              type="button"
-              onClick={handleRegenerate}
-              disabled={!lastAssistantMessageId || isLoading || isDraftSession}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              重新生成
             </button>
           </div>
         </div>
@@ -246,7 +255,11 @@ function ChatSession({
                 </div>
               </div>
             ) : (
-              <MessageList messages={safeMessages} />
+              <MessageList
+                messages={safeMessages}
+                onRegenerate={handleRegenerate}
+                canRegenerate={!isLoading && !isDraftSession && Boolean(lastAssistantMessageId)}
+              />
             )}
 
             {isLoading ? (

@@ -10,6 +10,8 @@ import type { UIMessage } from "ai";
 
 type MessageListProps = {
   messages: UIMessage[];
+  onRegenerate?: () => void;
+  canRegenerate?: boolean;
 };
 
 /**
@@ -85,7 +87,17 @@ function CodeBlock({
   );
 }
 
-function MessageCard({ message }: { message: UIMessage }) {
+function MessageCard({
+  message,
+  isLatestAssistant,
+  onRegenerate,
+  canRegenerate,
+}: {
+  message: UIMessage;
+  isLatestAssistant: boolean;
+  onRegenerate?: () => void;
+  canRegenerate: boolean;
+}) {
   const content = getMessageContent(message);
   const isAssistant = message.role === "assistant";
   const [copied, setCopied] = useState(false);
@@ -143,13 +155,25 @@ function MessageCard({ message }: { message: UIMessage }) {
           >
             {isAssistant ? "Assistant" : "You"}
           </span>
-          <button
-            type="button"
-            onClick={handleCopyText}
-            className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 opacity-0 transition group-hover:opacity-100 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
-          >
-            {copied ? "已复制" : "复制文本"}
-          </button>
+          <div className="flex items-center gap-1.5 opacity-0 transition group-hover:opacity-100">
+            <button
+              type="button"
+              onClick={handleCopyText}
+              className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+            >
+              {copied ? "已复制" : "复制文本"}
+            </button>
+            {isAssistant && isLatestAssistant && onRegenerate ? (
+              <button
+                type="button"
+                onClick={onRegenerate}
+                disabled={!canRegenerate}
+                className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+              >
+                重新生成
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {isAssistant ? (
@@ -211,11 +235,25 @@ function MessageCard({ message }: { message: UIMessage }) {
   );
 }
 
-export default function MessageList({ messages }: MessageListProps) {
+export default function MessageList({
+  messages,
+  onRegenerate,
+  canRegenerate = false,
+}: MessageListProps) {
+  const latestAssistantMessageId = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant")?.id;
+
   return (
     <div className="flex flex-col gap-5">
       {messages.map((message) => (
-        <MessageCard key={message.id} message={message} />
+        <MessageCard
+          key={message.id}
+          message={message}
+          isLatestAssistant={message.id === latestAssistantMessageId}
+          onRegenerate={onRegenerate}
+          canRegenerate={canRegenerate}
+        />
       ))}
     </div>
   );
