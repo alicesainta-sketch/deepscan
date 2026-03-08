@@ -1,8 +1,10 @@
+import type { SupportedChatModel } from "@/lib/model/models";
+
 export interface ChatModel {
   id: number;
   userId: string;
   title: string;
-  model: string;
+  model: SupportedChatModel;
   pinned: boolean;
   tagId?: string | null;
   createdAt: number;

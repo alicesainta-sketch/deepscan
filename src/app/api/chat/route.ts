@@ -1,25 +1,16 @@
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { streamText, convertToModelMessages } from "ai";
+import {
+  normalizeChatPayload,
+  resolveChatGatewayConfig,
+  streamChatWithGateway,
+} from "@/lib/model/chatGateway";
+import { recordServerEvent } from "@/lib/observability/serverEvents";
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
 
-const getDeepseekClient = (apiKey: string, baseURL: string) =>
-  createOpenAICompatible({
-    apiKey,
-    baseURL,
-    name: "deepseek",
-  });
-
 export async function POST(req: Request) {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  const baseURL = process.env.BASE_URL;
-  if (!apiKey || !baseURL) {
-    return Response.json(
-      { error: "Missing DEEPSEEK_API_KEY or BASE_URL" },
-      { status: 500 }
-    );
-  }
+  const requestStartedAt = Date.now();
+  let gatewayConfig: ReturnType<typeof resolveChatGatewayConfig>;
 
   let body: unknown;
   try {
@@ -28,27 +19,39 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid request payload" }, { status: 400 });
   }
 
-  const payload =
-    body && typeof body === "object"
-      ? (body as { messages?: unknown; model?: unknown })
-      : {};
-  const messages = Array.isArray(payload.messages) ? payload.messages : [];
-  const model =
-    payload.model === "deepseek-r1" || payload.model === "deepseek-v3"
-      ? payload.model
-      : "deepseek-v3";
+  const payload = normalizeChatPayload(body);
 
   try {
-    const deepseekClient = getDeepseekClient(apiKey, baseURL);
-    const result = await streamText({
-      model: deepseekClient(model),
-      system: "You are a helpful assistant.",
-      messages: await convertToModelMessages(messages),
+    gatewayConfig = resolveChatGatewayConfig();
+  } catch (error) {
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Missing model config" },
+      { status: 500 }
+    );
+  }
+
+  recordServerEvent("chat.request.received", {
+    model: payload.model,
+    messageCount: payload.messages.length,
+    hasAgentContext: Boolean(payload.agentContext),
+  });
+
+  try {
+    const result = await streamChatWithGateway(payload, gatewayConfig);
+
+    recordServerEvent("chat.stream.started", {
+      model: payload.model,
+      elapsedMs: Date.now() - requestStartedAt,
     });
 
     return result.toUIMessageStreamResponse();
   } catch (error) {
     console.error("Chat API upstream error:", error);
+    recordServerEvent("chat.stream.failed", {
+      model: payload.model,
+      elapsedMs: Date.now() - requestStartedAt,
+      message: error instanceof Error ? error.message : "unknown_error",
+    });
     return Response.json({ error: "Upstream model request failed" }, { status: 502 });
   }
 }

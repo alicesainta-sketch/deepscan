@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
+import type { UIMessage } from "ai";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Virtuoso } from "react-virtuoso";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import type { HTMLAttributes, ReactNode } from "react";
-import type { UIMessage } from "ai";
 
 type MessageListProps = {
   messages: UIMessage[];
-  onRegenerate?: () => void;
+  onRegenerate?: (messageId: string) => void;
   canRegenerate?: boolean;
+  isStreaming?: boolean;
 };
 
 /**
@@ -23,13 +24,7 @@ const getMessageContent = (message: UIMessage) => {
     .join("");
 };
 
-function CodeBlock({
-  code,
-  language,
-}: {
-  code: string;
-  language: string;
-}) {
+function CodeBlock({ code, language }: { code: string; language: string }) {
   const [copied, setCopied] = useState(false);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -87,17 +82,17 @@ function CodeBlock({
   );
 }
 
-function MessageCard({
+type MessageCardProps = {
+  message: UIMessage;
+  onRegenerate?: (messageId: string) => void;
+  canRegenerate: boolean;
+};
+
+const MessageCard = memo(function MessageCard({
   message,
-  isLatestAssistant,
   onRegenerate,
   canRegenerate,
-}: {
-  message: UIMessage;
-  isLatestAssistant: boolean;
-  onRegenerate?: () => void;
-  canRegenerate: boolean;
-}) {
+}: MessageCardProps) {
   const content = getMessageContent(message);
   const isAssistant = message.role === "assistant";
   const [copied, setCopied] = useState(false);
@@ -163,10 +158,10 @@ function MessageCard({
             >
               {copied ? "已复制" : "复制文本"}
             </button>
-            {isAssistant && isLatestAssistant && onRegenerate ? (
+            {isAssistant && onRegenerate ? (
               <button
                 type="button"
-                onClick={onRegenerate}
+                onClick={() => onRegenerate(message.id)}
                 disabled={!canRegenerate}
                 className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
               >
@@ -206,12 +201,7 @@ function MessageCard({
 
                   const matched = /language-(\w+)/.exec(className ?? "");
                   const language = matched ? matched[1] : "text";
-                  return (
-                    <CodeBlock
-                      code={raw.replace(/\n$/, "")}
-                      language={language}
-                    />
-                  );
+                  return <CodeBlock code={raw.replace(/\n$/, "")} language={language} />;
                 },
                 p: ({ children }: { children?: ReactNode }) => (
                   <p className="mb-2 last:mb-0">{children}</p>
@@ -233,28 +223,33 @@ function MessageCard({
       </div>
     </article>
   );
-}
+});
 
+/**
+ * 使用虚拟列表承载长会话，降低 DOM 数量并稳定滚动帧率。
+ */
 export default function MessageList({
   messages,
   onRegenerate,
   canRegenerate = false,
+  isStreaming = false,
 }: MessageListProps) {
-  const latestAssistantMessageId = [...messages]
-    .reverse()
-    .find((message) => message.role === "assistant")?.id;
-
   return (
-    <div className="flex flex-col gap-5">
-      {messages.map((message) => (
-        <MessageCard
-          key={message.id}
-          message={message}
-          isLatestAssistant={message.id === latestAssistantMessageId}
-          onRegenerate={onRegenerate}
-          canRegenerate={canRegenerate}
-        />
-      ))}
+    <div className="h-full">
+      <Virtuoso
+        data={messages}
+        followOutput={isStreaming ? "smooth" : false}
+        increaseViewportBy={480}
+        itemContent={(_, message) => (
+          <div className="py-2.5">
+            <MessageCard
+              message={message}
+              onRegenerate={onRegenerate}
+              canRegenerate={canRegenerate}
+            />
+          </div>
+        )}
+      />
     </div>
   );
 }
