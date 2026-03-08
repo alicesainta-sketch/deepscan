@@ -10,6 +10,7 @@ import {
   listChats,
   updateLocalChat,
 } from "@/lib/chatStore";
+import { useGlobalChatModel } from "@/lib/model/globalModel";
 import type { ChatModel } from "@/types/chat";
 import {
   IconCheck,
@@ -50,6 +51,7 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
   const [draftTitle, setDraftTitle] = useState("");
   const [busyChatId, setBusyChatId] = useState<number | null>(null);
   const [actionError, setActionError] = useState("");
+  const globalModel = useGlobalChatModel();
 
   const {
     data: chats = [],
@@ -86,7 +88,7 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
     try {
       const created = await createLocalChat(chatScope, {
         title: "新对话",
-        model: "deepseek-v3",
+        model: globalModel,
       });
       await queryClient.invalidateQueries({ queryKey: ["chats", chatScope] });
       router.push(`/chat/${created.id}`);

@@ -1,6 +1,10 @@
 import type { UIMessage } from "ai";
 import type { ChatModel } from "@/types/chat";
 import {
+  normalizeChatModel,
+  type SupportedChatModel,
+} from "@/lib/model/models";
+import {
   readStoredMessages,
   removeStoredMessages,
   writeStoredMessages,
@@ -39,10 +43,7 @@ const normalizeChat = (chat: Partial<ChatModel>, fallbackId: number): ChatModel 
     id: typeof chat.id === "number" ? chat.id : fallbackId,
     userId: typeof chat.userId === "string" ? chat.userId : "guest",
     title: typeof chat.title === "string" ? chat.title : "新对话",
-    model:
-      chat.model === "deepseek-r1" || chat.model === "deepseek-v3"
-        ? chat.model
-        : "deepseek-v3",
+    model: normalizeChatModel(chat.model),
     pinned: Boolean(chat.pinned),
     tagId: null,
     createdAt,
@@ -164,7 +165,7 @@ export const createLocalChat = async (
   scope: string,
   payload: {
     title: string;
-    model: "deepseek-v3" | "deepseek-r1";
+    model: SupportedChatModel;
   }
 ) => {
   const store = readStore();
@@ -194,7 +195,7 @@ export const updateLocalChat = async (
   payload: {
     title?: string;
     pinned?: boolean;
-    model?: "deepseek-v3" | "deepseek-r1";
+    model?: SupportedChatModel;
   }
 ) => {
   const store = readStore();
@@ -211,10 +212,7 @@ export const updateLocalChat = async (
     ...chat,
     title: nextTitle,
     pinned: typeof payload.pinned === "boolean" ? payload.pinned : chat.pinned,
-    model:
-      payload.model === "deepseek-r1" || payload.model === "deepseek-v3"
-        ? payload.model
-        : chat.model,
+    model: payload.model ? normalizeChatModel(payload.model) : chat.model,
     tagId: null,
     updatedAt: Date.now(),
   };

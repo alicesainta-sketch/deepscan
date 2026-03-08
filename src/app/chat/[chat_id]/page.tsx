@@ -5,30 +5,46 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { UIMessage } from "ai";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import AgentMvpPanel from "@/app/components/AgentMvpPanel";
 import ErrorDisplay from "@/app/components/ErrorDisplay";
 import InputField from "@/app/components/InputField";
 import LoadingIndicator from "@/app/components/LoadingIndicator";
 import MessageList from "@/app/components/MessageList";
-import AgentMvpPanel from "@/app/components/AgentMvpPanel";
+import ModelSelector from "@/app/components/ModelSelector";
 import { IconFlask, IconMoon, IconSun } from "@/components/icons";
 import { useTheme } from "@/components/ThemeProvider";
+import { runAgentPipelineForChat } from "@/lib/agent/chatPipeline";
 import { createLocalChat, getChatScope, updateLocalChat } from "@/lib/chatStore";
-import { getFirstUserMessageText } from "@/lib/chatMessages";
+import { getFirstUserMessageText, getMessageText } from "@/lib/chatMessages";
 import { readStoredMessages, writeStoredMessages } from "@/lib/chatMessageStorage";
+import { setGlobalChatModel, useGlobalChatModel } from "@/lib/model/globalModel";
+import { recordClientEvent } from "@/lib/observability/clientEvents";
 import { useHydrated } from "@/lib/useHydrated";
 
-const DEFAULT_MODEL = "deepseek-v3";
+type StreamMetric = {
+  requestId: string;
+  startedAt: number;
+  firstTokenAt?: number;
+};
 
 /**
- * 从消息列表尾部提取最后一条 assistant 消息 id，用于触发“重新生成”。
+ * 根据 assistant 消息定位其前置 user 输入，用于“消息级重新生成”。
  */
-const getLastAssistantMessageId = (messages: UIMessage[]) => {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index].role === "assistant") {
-      return messages[index].id;
+const getPromptForRegenerate = (messages: UIMessage[], assistantMessageId: string) => {
+  const assistantIndex = messages.findIndex((message) => message.id === assistantMessageId);
+  if (assistantIndex < 0) return "";
+
+  for (let index = assistantIndex - 1; index >= 0; index -= 1) {
+    if (messages[index].role === "user") {
+      return getMessageText(messages[index]);
     }
   }
-  return null;
+  return "";
+};
+
+const truncate = (value: string, maxLength = 42) => {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength)}...`;
 };
 
 function ChatSession({
@@ -45,49 +61,113 @@ function ChatSession({
   const router = useRouter();
   const queryClient = useQueryClient();
   const { theme, isHydrated, toggleTheme } = useTheme();
+  const globalModel = useGlobalChatModel();
   const isDraftSession = routeChatId === "new";
   const sessionId = isDraftSession ? "draft:new" : routeChatId;
   const [input, setInput] = useState("");
   const [localActionError, setLocalActionError] = useState("");
   const [showAgentPanel, setShowAgentPanel] = useState(false);
-  const endRef = useRef<HTMLDivElement | null>(null);
+  const [agentHint, setAgentHint] = useState("Agent: idle");
+  const [lastTtftMs, setLastTtftMs] = useState<number | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const hasAutoSentRef = useRef(false);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streamMetricRef = useRef<StreamMetric | null>(null);
 
   const initialMessages = useMemo(() => {
     if (isDraftSession) return [];
     return readStoredMessages(sessionId);
   }, [isDraftSession, sessionId]);
 
-  const { messages, sendMessage, regenerate, error, status, stop, clearError } =
-    useChat({
-      id: sessionId,
-      messages: initialMessages,
-      onError: (chatError) => {
-        console.error("chat error", chatError);
-      },
+  useEffect(() => {
+    if (isDraftSession) return;
+    recordClientEvent("chat.history.loaded", {
+      sessionId,
+      messageCount: initialMessages.length,
     });
+  }, [initialMessages.length, isDraftSession, sessionId]);
+
+  const { messages, sendMessage, regenerate, error, status, stop, clearError } = useChat({
+    id: sessionId,
+    messages: initialMessages,
+    onError: (chatError) => {
+      console.error("chat error", chatError);
+      recordClientEvent("chat.stream.error", {
+        sessionId,
+        message: chatError.message,
+      });
+    },
+  });
 
   const safeMessages = useMemo(() => messages ?? [], [messages]);
   const messageCount = safeMessages.length;
   const isLoading = status === "streaming" || status === "submitted";
-  const lastAssistantMessageId = useMemo(
-    () => getLastAssistantMessageId(safeMessages),
-    [safeMessages]
-  );
   const firstUserTitle = useMemo(
     () => getFirstUserMessageText(safeMessages).slice(0, 40) || "新对话",
     [safeMessages]
   );
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messageCount, isLoading]);
+  const latestAssistantTextLength = useMemo(() => {
+    for (let index = safeMessages.length - 1; index >= 0; index -= 1) {
+      if (safeMessages[index].role === "assistant") {
+        return getMessageText(safeMessages[index]).length;
+      }
+    }
+    return 0;
+  }, [safeMessages]);
 
   useEffect(() => {
     if (isDraftSession) return;
-    writeStoredMessages(sessionId, safeMessages);
-  }, [isDraftSession, sessionId, safeMessages]);
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+
+    // 流式生成期间以较低频率落盘，降低长会话 localStorage 写入抖动。
+    const delayMs = isLoading ? 260 : 80;
+    persistTimerRef.current = setTimeout(() => {
+      writeStoredMessages(sessionId, safeMessages);
+      recordClientEvent("chat.history.persisted", {
+        sessionId,
+        messageCount: safeMessages.length,
+      });
+    }, delayMs);
+
+    return () => {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+    };
+  }, [isDraftSession, isLoading, safeMessages, sessionId]);
+
+  useEffect(() => {
+    const activeMetric = streamMetricRef.current;
+    if (!activeMetric) return;
+
+    if (status === "streaming" && !activeMetric.firstTokenAt && latestAssistantTextLength > 0) {
+      activeMetric.firstTokenAt = Date.now();
+      const ttftMs = activeMetric.firstTokenAt - activeMetric.startedAt;
+      setLastTtftMs(ttftMs);
+      recordClientEvent("chat.stream.first_token", {
+        sessionId,
+        requestId: activeMetric.requestId,
+        ttftMs,
+      });
+    }
+
+    if (status === "ready" || status === "error") {
+      recordClientEvent("chat.stream.completed", {
+        sessionId,
+        requestId: activeMetric.requestId,
+        status,
+        durationMs: Date.now() - activeMetric.startedAt,
+        ttftMs: activeMetric.firstTokenAt
+          ? activeMetric.firstTokenAt - activeMetric.startedAt
+          : null,
+      });
+      streamMetricRef.current = null;
+    }
+  }, [latestAssistantTextLength, sessionId, status]);
 
   /**
    * 新建草稿页提交时先创建会话，再跳转到正式会话并自动发送首条消息。
@@ -97,14 +177,74 @@ function ChatSession({
       const normalizedTitle = text.slice(0, 40) || "新对话";
       const created = await createLocalChat(chatScope, {
         title: normalizedTitle,
-        model: DEFAULT_MODEL,
+        model: globalModel,
       });
       await queryClient.invalidateQueries({ queryKey: ["chats", chatScope] });
 
       const query = new URLSearchParams({ q: text }).toString();
       router.replace(`/chat/${created.id}?${query}`);
     },
-    [chatScope, queryClient, router]
+    [chatScope, globalModel, queryClient, router]
+  );
+
+  /**
+   * 主链路发送：先执行 Agent，再将结果作为上下文注入模型调用。
+   */
+  const sendWithPipeline = useCallback(
+    async (
+      text: string,
+      options?: {
+        mode: "send" | "regenerate";
+        assistantMessageId?: string;
+      }
+    ) => {
+      const requestId = `req_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      streamMetricRef.current = { requestId, startedAt: Date.now() };
+      recordClientEvent("chat.send.started", {
+        sessionId,
+        requestId,
+        mode: options?.mode ?? "send",
+        model: globalModel,
+      });
+
+      setAgentHint("Agent: 执行中...");
+      const agentResult = await runAgentPipelineForChat({
+        sessionId,
+        input: text,
+      });
+
+      if (agentResult.context) {
+        setAgentHint(`Agent: ${truncate(agentResult.context.summary)}`);
+      } else if (agentResult.reason) {
+        setAgentHint(`Agent: 已降级 (${truncate(agentResult.reason, 24)})`);
+      } else {
+        setAgentHint("Agent: 已降级");
+      }
+
+      recordClientEvent("agent.pipeline.completed", {
+        sessionId,
+        requestId,
+        degraded: agentResult.degraded,
+        runStatus: agentResult.state?.status ?? "unknown",
+        errorCode: agentResult.state?.lastError?.code,
+      });
+
+      const requestBody = {
+        model: globalModel,
+        agentContext: agentResult.context,
+      };
+
+      if (options?.mode === "regenerate" && options.assistantMessageId) {
+        regenerate({
+          messageId: options.assistantMessageId,
+          body: requestBody,
+        });
+        return;
+      }
+
+      sendMessage({ text }, { body: requestBody });
+    },
+    [globalModel, regenerate, sendMessage, sessionId]
   );
 
   useEffect(() => {
@@ -118,7 +258,6 @@ function ChatSession({
           submitError instanceof Error ? submitError.message : "创建会话失败"
         );
       });
-      return;
     }
   }, [autoSend, createChatAndRedirect, initialPrompt, isDraftSession]);
 
@@ -128,11 +267,11 @@ function ChatSession({
     if (messageCount > 0) return;
     if (hasAutoSentRef.current) return;
 
+    const prompt = initialPrompt.trim();
     hasAutoSentRef.current = true;
-    sendMessage(
-      { text: initialPrompt.trim() },
-      { body: { model: DEFAULT_MODEL } }
-    );
+    queueMicrotask(() => {
+      void sendWithPipeline(prompt);
+    });
     router.replace(`/chat/${routeChatId}`);
   }, [
     initialPrompt,
@@ -140,7 +279,7 @@ function ChatSession({
     messageCount,
     routeChatId,
     router,
-    sendMessage,
+    sendWithPipeline,
   ]);
 
   useEffect(() => {
@@ -153,13 +292,14 @@ function ChatSession({
     // 在会话产生实际内容后同步标题与更新时间，保持侧栏排序正确。
     void updateLocalChat(chatScope, chatId, {
       title: firstUserTitle,
-      model: DEFAULT_MODEL,
+      model: globalModel,
     }).then(() => {
       void queryClient.invalidateQueries({ queryKey: ["chats", chatScope] });
     });
   }, [
     chatScope,
     firstUserTitle,
+    globalModel,
     isDraftSession,
     messageCount,
     queryClient,
@@ -183,12 +323,20 @@ function ChatSession({
       return;
     }
 
-    sendMessage({ text }, { body: { model: DEFAULT_MODEL } });
+    void sendWithPipeline(text, { mode: "send" });
   };
 
-  const handleRegenerate = () => {
-    if (!lastAssistantMessageId || isLoading) return;
-    regenerate({ messageId: lastAssistantMessageId, body: { model: DEFAULT_MODEL } });
+  const handleRegenerate = (assistantMessageId: string) => {
+    if (isLoading || isDraftSession) return;
+    const prompt = getPromptForRegenerate(safeMessages, assistantMessageId);
+    if (!prompt) {
+      setLocalActionError("未找到可用于重新生成的用户输入");
+      return;
+    }
+    void sendWithPipeline(prompt, {
+      mode: "regenerate",
+      assistantMessageId,
+    });
   };
 
   return (
@@ -201,9 +349,18 @@ function ChatSession({
             </h1>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               {isLoading ? "Assistant 正在思考..." : "Ready"}
+              <span className="ml-2 hidden md:inline">{agentHint}</span>
+              <span className="ml-2 hidden md:inline">
+                {lastTtftMs === null ? "" : `TTFT ${lastTtftMs}ms`}
+              </span>
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <ModelSelector
+              value={globalModel}
+              onChange={(model) => setGlobalChatModel(model)}
+              disabled={isLoading}
+            />
             <button
               type="button"
               onClick={toggleTheme}
@@ -237,43 +394,44 @@ function ChatSession({
       </header>
 
       <main className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex-1 overflow-auto px-4 py-4 md:px-6">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+        <div className="flex-1 overflow-hidden px-4 py-4 md:px-6">
+          <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-4">
             {showAgentPanel ? <AgentMvpPanel /> : null}
             {error ? <ErrorDisplay error={error} onDismiss={clearError} /> : null}
             {localActionError ? <ErrorDisplay error={localActionError} /> : null}
 
-            {safeMessages.length === 0 ? (
-              <div className="flex min-h-[38vh] items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-900">
-                <div>
-                  <p className="text-base font-medium text-slate-800 dark:text-slate-100">
-                    今天想聊什么？
-                  </p>
-                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                    输入问题后即可开始一段新的对话。
-                  </p>
+            <div className="min-h-0 flex-1">
+              {safeMessages.length === 0 ? (
+                <div className="flex h-full min-h-[38vh] items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-900">
+                  <div>
+                    <p className="text-base font-medium text-slate-800 dark:text-slate-100">
+                      今天想聊什么？
+                    </p>
+                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                      输入问题后即可开始一段新的对话。
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <MessageList
-                messages={safeMessages}
-                onRegenerate={handleRegenerate}
-                canRegenerate={!isLoading && !isDraftSession && Boolean(lastAssistantMessageId)}
-              />
-            )}
+              ) : (
+                <MessageList
+                  messages={safeMessages}
+                  onRegenerate={handleRegenerate}
+                  canRegenerate={!isLoading && !isDraftSession}
+                  isStreaming={isLoading}
+                />
+              )}
+            </div>
 
             {isLoading ? (
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
                 <LoadingIndicator />
               </div>
             ) : null}
-
-            <div ref={endRef} className="h-1" />
           </div>
         </div>
 
         <div className="border-t border-slate-200/80 bg-[#faf9f5] px-4 py-4 dark:border-slate-700 dark:bg-slate-900 md:px-6">
-          <div className="mx-auto w-full max-w-3xl">
+          <div className="mx-auto w-full max-w-4xl">
             <InputField
               input={input}
               onInputChange={setInput}
