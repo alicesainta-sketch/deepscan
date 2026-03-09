@@ -13,6 +13,7 @@ type MessageListProps = {
   onRegenerate?: (messageId: string) => void;
   canRegenerate?: boolean;
   isStreaming?: boolean;
+  scrollerRef?: (element: HTMLElement | Window | null) => void;
 };
 
 /**
@@ -233,6 +234,7 @@ export default function MessageList({
   onRegenerate,
   canRegenerate = false,
   isStreaming = false,
+  scrollerRef,
 }: MessageListProps) {
   return (
     <div className="h-full">
@@ -240,6 +242,7 @@ export default function MessageList({
         data={messages}
         followOutput={isStreaming ? "smooth" : false}
         increaseViewportBy={480}
+        scrollerRef={scrollerRef}
         itemContent={(_, message) => (
           <div className="py-2.5">
             <MessageCard
