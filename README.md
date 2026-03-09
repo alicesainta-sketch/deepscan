@@ -9,6 +9,7 @@
 - [CI 检查](#ci-检查)
 - [项目结构](#项目结构)
 - [按目标阅读文档](#按目标阅读文档)
+- [性能基线复现](#性能基线复现)
 - [许可证](#许可证)
 
 ## 展示快照
@@ -33,6 +34,15 @@ pnpm test
 pnpm lint
 pnpm type-check
 ```
+
+## 性能基线复现
+
+```bash
+pnpm dev
+```
+
+打开 `http://localhost:3000/perf`，使用固定轮次执行基线并记录结果。  
+详细说明见 [docs/performance-baseline.md](docs/performance-baseline.md)。
 
 ## CI 检查
 
