@@ -16,9 +16,6 @@ const MODEL_LABELS: Record<SupportedChatModel, string> = {
   "deepseek-r1": "DeepSeek R1",
 };
 
-/**
- * 全局模型选择器：用于统一切换聊天模型，并保持跨会话一致。
- */
 export default function ModelSelector({
   value,
   onChange,

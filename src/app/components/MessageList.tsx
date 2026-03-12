@@ -16,9 +16,6 @@ type MessageListProps = {
   scrollerRef?: (element: HTMLElement | Window | null) => void;
 };
 
-/**
- * 提取消息中的纯文本片段，统一作为渲染与复制的数据来源。
- */
 const getMessageContent = (message: UIMessage) => {
   return message.parts
     .map((part) => (part.type === "text" ? part.text : ""))
@@ -226,9 +223,6 @@ const MessageCard = memo(function MessageCard({
   );
 });
 
-/**
- * 使用虚拟列表承载长会话，降低 DOM 数量并稳定滚动帧率。
- */
 export default function MessageList({
   messages,
   onRegenerate,

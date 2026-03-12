@@ -1,4 +1,10 @@
-import type { AdapterContext, AdapterResult, AgentAdapter } from "./adapter";
+import {
+  AgentAdapterError,
+  type AdapterContext,
+  type AdapterResult,
+  type AgentAdapter,
+} from "./adapter";
+import type { AgentErrorCode } from "./types";
 
 type HttpAgentAdapterOptions = {
   baseUrl: string;
@@ -9,7 +15,10 @@ type HttpAgentAdapterOptions = {
 
 type ErrorPayload = {
   error?: {
+    code?: AgentErrorCode;
     message?: string;
+    retryable?: boolean;
+    details?: unknown;
   };
 };
 
@@ -24,9 +33,6 @@ type SuccessPayload = {
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
-/**
- * 将远端响应统一映射为 adapter 标准输出，避免上层感知后端返回细节。
- */
 const normalizeSuccessPayload = (payload: unknown): AdapterResult => {
   if (!payload || typeof payload !== "object") {
     return { summary: "remote tool call completed" };
@@ -39,19 +45,34 @@ const normalizeSuccessPayload = (payload: unknown): AdapterResult => {
   return { summary, output };
 };
 
-const normalizeErrorMessage = (payload: unknown, status: number) => {
+const normalizeErrorPayload = (
+  payload: unknown,
+  status: number
+): {
+  code: AgentErrorCode;
+  message: string;
+  retryable: boolean;
+  details?: unknown;
+} => {
   if (payload && typeof payload === "object") {
     const parsed = payload as ErrorPayload;
     if (parsed.error?.message) {
-      return parsed.error.message;
+      return {
+        code: parsed.error.code ?? "UPSTREAM_ERROR",
+        message: parsed.error.message,
+        retryable: parsed.error.retryable ?? status >= 500,
+        details: parsed.error.details,
+      };
     }
   }
-  return `remote tool call failed with status ${status}`;
+  return {
+    code: "UPSTREAM_ERROR",
+    message: `remote tool call failed with status ${status}`,
+    retryable: status >= 500,
+    details: payload,
+  };
 };
 
-/**
- * HTTP 适配器：对接 `/v1/mcp/tools/{tool_name}/invoke`。
- */
 export class HttpAgentAdapter implements AgentAdapter {
   private readonly baseUrl: string;
   private readonly toolName: string;
@@ -85,6 +106,7 @@ export class HttpAgentAdapter implements AgentAdapter {
         ...this.headers,
       },
       body: JSON.stringify(requestBody),
+      signal: ctx.signal,
     });
 
     let payload: unknown = null;
@@ -95,7 +117,8 @@ export class HttpAgentAdapter implements AgentAdapter {
     }
 
     if (!response.ok) {
-      throw new Error(normalizeErrorMessage(payload, response.status));
+      const normalizedError = normalizeErrorPayload(payload, response.status);
+      throw new AgentAdapterError(normalizedError);
     }
 
     return normalizeSuccessPayload(payload);

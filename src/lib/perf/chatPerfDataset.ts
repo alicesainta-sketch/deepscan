@@ -6,9 +6,6 @@ const SAMPLE_CODE = [
   "```",
 ].join("\n");
 
-/**
- * 生成可复现的长会话数据集，便于在不同版本间做稳定对比。
- */
 export const buildSyntheticMessages = (turnCount: number): UIMessage[] => {
   const normalizedTurns = Math.max(1, Math.floor(turnCount));
   const messages: UIMessage[] = [];

@@ -86,7 +86,6 @@ const normalizeChatsByScope = (sourceScopes: unknown) => {
 };
 
 const migrateStore = (raw: unknown): ChatStoreState => {
-  // Always normalize unknown/legacy payloads into the latest schema.
   if (!raw || typeof raw !== "object") return getDefaultState();
 
   const candidate = raw as {
@@ -103,7 +102,6 @@ const migrateStore = (raw: unknown): ChatStoreState => {
     typeof candidate.nextChatId === "number" && candidate.nextChatId > 0
       ? candidate.nextChatId
       : 1;
-  // Guard against stale nextChatId by recomputing from the max existing chat id.
   const nextChatId = Math.max(storedNextChatId, maxChatId + 1);
 
   if (storedVersion > CHAT_STORE_VERSION) {
@@ -122,7 +120,6 @@ const migrateStore = (raw: unknown): ChatStoreState => {
 const readStore = (): ChatStoreState => {
   if (typeof window === "undefined") return getDefaultState();
 
-  // Prefer the new key, but still support one-time read from legacy key.
   const raw = localStorage.getItem(CHAT_STORE_KEY);
   const legacyRaw = raw ? null : localStorage.getItem(LEGACY_CHAT_STORE_KEY);
   const source = raw ?? legacyRaw;
@@ -135,7 +132,6 @@ const readStore = (): ChatStoreState => {
     const storedVersion = coerceVersion(
       (parsed as { version?: unknown })?.version
     );
-    // Rewrite normalized data so future reads always hit the latest schema.
     if (legacyRaw || storedVersion !== CHAT_STORE_VERSION) {
       writeStore(migrated);
       if (legacyRaw) {
@@ -240,7 +236,6 @@ export const exportLocalChats = async (
   scope: string
 ): Promise<ChatExportPayload> => {
   const chats = await listChats(scope);
-  // Export messages alongside chat metadata for complete backup/restore.
   const messagesByChatId: Record<string, UIMessage[]> = {};
   chats.forEach((chat) => {
     const messages = readStoredMessages(String(chat.id));

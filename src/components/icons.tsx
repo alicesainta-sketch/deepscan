@@ -26,11 +26,9 @@ import {
 export type IconProps = Omit<LucideProps, "ref">;
 
 type ToggleIconProps = IconProps & {
-  // When true, use filled style to indicate selected state.
   filled?: boolean;
 };
 
-// Factory for standard line icons to keep size and stroke consistent.
 const createIcon = (Icon: LucideIcon, name: string) => {
   const Component = ({ size = 18, strokeWidth = 1.8, ...props }: IconProps) => (
     <Icon size={size} strokeWidth={strokeWidth} {...props} />
@@ -39,7 +37,6 @@ const createIcon = (Icon: LucideIcon, name: string) => {
   return Component;
 };
 
-// Factory for toggled icons that can switch between outlined and filled.
 const createToggleIcon = (Icon: LucideIcon, name: string) => {
   const Component = ({
     filled = false,

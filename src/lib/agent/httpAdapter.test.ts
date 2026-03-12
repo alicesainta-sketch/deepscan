@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AgentAdapterError } from "./adapter";
 import { HttpAgentAdapter } from "./httpAdapter";
 
 const buildContext = () => ({
@@ -62,6 +63,35 @@ describe("httpAgentAdapter", () => {
     });
 
     await expect(adapter.invokeTool(buildContext())).rejects.toThrow("upstream down");
+  });
+
+  it("preserves remote error code and retryable flag", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        error: {
+          code: "UPSTREAM_ERROR",
+          message: "bad request",
+          retryable: false,
+          details: { field: "input" },
+        },
+      }),
+    });
+
+    const adapter = new HttpAgentAdapter({
+      baseUrl: "https://api.example.com",
+      toolName: "deepscan.search",
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    await expect(adapter.invokeTool(buildContext())).rejects.toMatchObject({
+      name: "AgentAdapterError",
+      code: "UPSTREAM_ERROR",
+      message: "bad request",
+      retryable: false,
+      details: { field: "input" },
+    } satisfies Partial<AgentAdapterError>);
   });
 
   it("falls back to default summary when response body is empty", async () => {

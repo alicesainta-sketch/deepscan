@@ -52,9 +52,6 @@ const getSnapshot = (): SupportedChatModel => {
 
 const getServerSnapshot = (): SupportedChatModel => DEFAULT_CHAT_MODEL;
 
-/**
- * 更新全局模型选择，并同步到 localStorage 供跨页面复用。
- */
 export const setGlobalChatModel = (model: SupportedChatModel) => {
   cachedModel = model;
   initialized = true;

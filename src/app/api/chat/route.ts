@@ -5,7 +5,6 @@ import {
 } from "@/lib/model/chatGateway";
 import { recordServerEvent } from "@/lib/observability/serverEvents";
 
-// Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
 
 export async function POST(req: Request) {

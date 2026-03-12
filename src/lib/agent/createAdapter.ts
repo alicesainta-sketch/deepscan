@@ -25,9 +25,6 @@ export type ResolvedAgentAdapter = {
   };
 };
 
-/**
- * 统一创建 adapter，确保运行层不直接依赖具体实现。
- */
 export const createAgentAdapter = (
   options: CreateAgentAdapterOptions = {}
 ): ResolvedAgentAdapter => {

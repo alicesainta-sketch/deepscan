@@ -18,9 +18,6 @@ type StorageMock = {
   setItem: (key: string, value: string) => void;
 };
 
-/**
- * 为依赖 localStorage 的 store 单测提供内存版存储实现。
- */
 const createStorageMock = (): StorageMock => {
   const store: StorageMap = new Map();
 
