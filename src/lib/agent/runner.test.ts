@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AgentAdapterError } from "./adapter";
 import { MockAgentAdapter } from "./mockAdapter";
 import { runAgent } from "./runner";
 
@@ -58,5 +59,55 @@ describe("agent runner", () => {
     expect(state.lastError?.code).toBe("TOOL_RETRY_EXHAUSTED");
     expect(state.steps[0].attempt).toBe(3);
     expect(adapter.callCount).toBe(3);
+  });
+
+  it("cancels run when abort signal is triggered", async () => {
+    const adapter = new MockAgentAdapter({ mode: "timeout" });
+    const controller = new AbortController();
+
+    const pending = runAgent({
+      runId: "run_cancelled",
+      sessionId: "chat_1",
+      input: "取消执行",
+      adapter,
+      maxRetries: 1,
+      timeoutMs: 100,
+      retryDelayMs: 0,
+      signal: controller.signal,
+    });
+
+    controller.abort();
+    const state = await pending;
+
+    expect(state.status).toBe("cancelled");
+    expect(state.steps[0].status).toBe("skipped");
+    expect(state.events.some((event) => event.type === "run.cancelled")).toBe(true);
+  });
+
+  it("does not retry non-retryable adapter errors", async () => {
+    const adapter = {
+      invokeTool: async () => {
+        throw new AgentAdapterError({
+          code: "UPSTREAM_ERROR",
+          message: "bad request",
+          retryable: false,
+        });
+      },
+    };
+
+    const state = await runAgent({
+      runId: "run_non_retryable",
+      sessionId: "chat_1",
+      input: "bad request",
+      adapter,
+      maxRetries: 3,
+      timeoutMs: 50,
+      retryDelayMs: 0,
+    });
+
+    expect(state.status).toBe("failed");
+    expect(state.lastError?.code).toBe("UPSTREAM_ERROR");
+    expect(state.steps[0].attempt).toBe(1);
+    expect(state.events.some((event) => event.type === "retry.scheduled")).toBe(false);
   });
 });

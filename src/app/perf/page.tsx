@@ -29,9 +29,6 @@ const getUsedHeapSize = () => {
     : null;
 };
 
-/**
- * 用两帧作为“渲染稳定”采样点，减少单帧偶然抖动影响。
- */
 const waitForStableFrame = async () => {
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => {
@@ -42,9 +39,6 @@ const waitForStableFrame = async () => {
   });
 };
 
-/**
- * 通过固定时长自动滚动来估算滚动帧率。
- */
 const measureScrollFps = async (element: HTMLElement) => {
   const durationMs = 1_500;
   const start = performance.now();

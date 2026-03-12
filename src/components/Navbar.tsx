@@ -28,9 +28,6 @@ type NavbarProps = {
   onToggleCollapse: () => void;
 };
 
-/**
- * 将时间戳格式化为“x 分钟前”，保持会话列表信息密度与可读性平衡。
- */
 const formatRelativeTime = (updatedAt: number) => {
   const diffMs = Date.now() - updatedAt;
   const minute = 60_000;
@@ -67,9 +64,6 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
 
   const chatList = useMemo(() => chats, [chats]);
 
-  /**
-   * 统一包装侧边栏会话操作，保证错误处理和刷新逻辑一致。
-   */
   const runChatAction = async (chatId: number, task: () => Promise<void>) => {
     setActionError("");
     setBusyChatId(chatId);

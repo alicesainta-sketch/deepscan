@@ -25,9 +25,6 @@ const readEvents = (): ClientEventRecord[] => {
   }
 };
 
-/**
- * 记录浏览器侧关键链路事件，便于排查实时交互与 Agent 链路问题。
- */
 export const recordClientEvent = (
   name: string,
   payload: ClientEventPayload = {}

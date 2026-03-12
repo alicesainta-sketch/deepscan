@@ -21,9 +21,6 @@ export type NormalizedChatPayload = {
 
 const BASE_SYSTEM_PROMPT = "You are a helpful assistant.";
 
-/**
- * 从环境变量读取网关配置，统一收敛错误出口。
- */
 export const resolveChatGatewayConfig = (
   env?: ChatGatewayEnv
 ): ChatGatewayConfig => {
@@ -61,9 +58,6 @@ const parseAgentContext = (raw: unknown): AgentPipelineContext | null => {
   };
 };
 
-/**
- * 将请求体规范化为统一结构，避免 route 中散落校验逻辑。
- */
 export const normalizeChatPayload = (body: unknown): NormalizedChatPayload => {
   const payload =
     body && typeof body === "object"
@@ -79,9 +73,6 @@ export const normalizeChatPayload = (body: unknown): NormalizedChatPayload => {
   };
 };
 
-/**
- * 在不破坏原始系统提示的前提下，附加 Agent 运行摘要以保持上下文连续。
- */
 export const buildSystemPrompt = (
   agentContext: AgentPipelineContext | null
 ): string => {
@@ -105,9 +96,6 @@ export const buildSystemPrompt = (
   return `${BASE_SYSTEM_PROMPT}\n\n${pipelineSummary}`;
 };
 
-/**
- * 统一执行 OpenAI-compatible 流式调用，供 API route 复用。
- */
 export const streamChatWithGateway = async (
   payload: NormalizedChatPayload,
   config?: ChatGatewayConfig

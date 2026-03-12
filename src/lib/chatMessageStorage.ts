@@ -11,7 +11,6 @@ type MessageCacheEntry = {
 
 const messageCache = new Map<string, MessageCacheEntry>();
 
-// Centralize message persistence so export/import and draft migration stay consistent.
 export const readStoredMessages = (sessionId: string): UIMessage[] => {
   if (typeof window === "undefined") return [];
   const storageKey = getChatMessagesStorageKey(sessionId);
@@ -33,7 +32,6 @@ export const readStoredMessages = (sessionId: string): UIMessage[] => {
   }
 };
 
-// Persist full message arrays for a given session id.
 export const writeStoredMessages = (sessionId: string, messages: UIMessage[]) => {
   if (typeof window === "undefined") return;
   const storageKey = getChatMessagesStorageKey(sessionId);
@@ -42,7 +40,6 @@ export const writeStoredMessages = (sessionId: string, messages: UIMessage[]) =>
   localStorage.setItem(storageKey, serialized);
 };
 
-// Remove all messages for a session, used by replace-import cleanup.
 export const removeStoredMessages = (sessionId: string) => {
   if (typeof window === "undefined") return;
   const storageKey = getChatMessagesStorageKey(sessionId);

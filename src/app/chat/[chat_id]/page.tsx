@@ -17,6 +17,7 @@ import { runAgentPipelineForChat } from "@/lib/agent/chatPipeline";
 import { createLocalChat, getChatScope, updateLocalChat } from "@/lib/chatStore";
 import { getFirstUserMessageText, getMessageText } from "@/lib/chatMessages";
 import { readStoredMessages, writeStoredMessages } from "@/lib/chatMessageStorage";
+import type { AgentErrorCode, AgentRunStatus } from "@/lib/agent/types";
 import { setGlobalChatModel, useGlobalChatModel } from "@/lib/model/globalModel";
 import { recordClientEvent } from "@/lib/observability/clientEvents";
 import { useHydrated } from "@/lib/useHydrated";
@@ -27,9 +28,16 @@ type StreamMetric = {
   firstTokenAt?: number;
 };
 
-/**
- * 根据 assistant 消息定位其前置 user 输入，用于“消息级重新生成”。
- */
+type AgentRunSummary = {
+  status: AgentRunStatus;
+  attempts: number;
+  durationMs: number;
+  degraded: boolean;
+  summary?: string;
+  adapterMode?: "mock" | "http";
+  errorCode?: AgentErrorCode;
+};
+
 const getPromptForRegenerate = (messages: UIMessage[], assistantMessageId: string) => {
   const assistantIndex = messages.findIndex((message) => message.id === assistantMessageId);
   if (assistantIndex < 0) return "";
@@ -68,11 +76,16 @@ function ChatSession({
   const [localActionError, setLocalActionError] = useState("");
   const [showAgentPanel, setShowAgentPanel] = useState(false);
   const [agentHint, setAgentHint] = useState("Agent: idle");
+  const [agentRunSummary, setAgentRunSummary] = useState<AgentRunSummary | null>(null);
   const [lastTtftMs, setLastTtftMs] = useState<number | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const hasAutoSentRef = useRef(false);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamMetricRef = useRef<StreamMetric | null>(null);
+  const activePipelineRef = useRef<{
+    requestId: string;
+    controller: AbortController;
+  } | null>(null);
 
   const initialMessages = useMemo(() => {
     if (isDraftSession) return [];
@@ -122,7 +135,6 @@ function ChatSession({
       persistTimerRef.current = null;
     }
 
-    // 流式生成期间以较低频率落盘，降低长会话 localStorage 写入抖动。
     const delayMs = isLoading ? 260 : 80;
     persistTimerRef.current = setTimeout(() => {
       writeStoredMessages(sessionId, safeMessages);
@@ -169,9 +181,12 @@ function ChatSession({
     }
   }, [latestAssistantTextLength, sessionId, status]);
 
-  /**
-   * 新建草稿页提交时先创建会话，再跳转到正式会话并自动发送首条消息。
-   */
+  useEffect(() => {
+    return () => {
+      activePipelineRef.current?.controller.abort();
+    };
+  }, []);
+
   const createChatAndRedirect = useCallback(
     async (text: string) => {
       const normalizedTitle = text.slice(0, 40) || "新对话";
@@ -187,9 +202,6 @@ function ChatSession({
     [chatScope, globalModel, queryClient, router]
   );
 
-  /**
-   * 主链路发送：先执行 Agent，再将结果作为上下文注入模型调用。
-   */
   const sendWithPipeline = useCallback(
     async (
       text: string,
@@ -199,6 +211,18 @@ function ChatSession({
       }
     ) => {
       const requestId = `req_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const previousPipeline = activePipelineRef.current;
+      if (previousPipeline) {
+        previousPipeline.controller.abort();
+        recordClientEvent("agent.pipeline.cancel_requested", {
+          sessionId,
+          requestId: previousPipeline.requestId,
+          reason: "superseded_by_new_request",
+        });
+      }
+
+      const controller = new AbortController();
+      activePipelineRef.current = { requestId, controller };
       streamMetricRef.current = { requestId, startedAt: Date.now() };
       recordClientEvent("chat.send.started", {
         sessionId,
@@ -208,10 +232,43 @@ function ChatSession({
       });
 
       setAgentHint("Agent: 执行中...");
+      setAgentRunSummary({
+        status: "running",
+        attempts: 0,
+        durationMs: 0,
+        degraded: false,
+      });
       const agentResult = await runAgentPipelineForChat({
         sessionId,
         input: text,
+        signal: controller.signal,
       });
+
+      if (activePipelineRef.current?.requestId !== requestId) {
+        return;
+      }
+      activePipelineRef.current = null;
+
+      const firstStep = agentResult.state?.steps[0];
+      const nextSummary: AgentRunSummary = {
+        status: agentResult.state?.status ?? "failed",
+        attempts: firstStep?.attempt ?? 0,
+        durationMs: agentResult.context?.durationMs ?? 0,
+        degraded: agentResult.degraded,
+        summary: agentResult.context?.summary,
+        adapterMode: agentResult.context?.adapterMode,
+        errorCode: agentResult.state?.lastError?.code,
+      };
+      setAgentRunSummary(nextSummary);
+
+      if (agentResult.state?.status === "cancelled") {
+        setAgentHint("Agent: 已取消");
+        recordClientEvent("agent.pipeline.cancelled", {
+          sessionId,
+          requestId,
+        });
+        return;
+      }
 
       if (agentResult.context) {
         setAgentHint(`Agent: ${truncate(agentResult.context.summary)}`);
@@ -227,6 +284,8 @@ function ChatSession({
         degraded: agentResult.degraded,
         runStatus: agentResult.state?.status ?? "unknown",
         errorCode: agentResult.state?.lastError?.code,
+        attempts: nextSummary.attempts,
+        durationMs: nextSummary.durationMs,
       });
 
       const requestBody = {
@@ -289,7 +348,6 @@ function ChatSession({
     const chatId = Number(routeChatId);
     if (!Number.isFinite(chatId)) return;
 
-    // 在会话产生实际内容后同步标题与更新时间，保持侧栏排序正确。
     void updateLocalChat(chatScope, chatId, {
       title: firstUserTitle,
       model: globalModel,
@@ -339,6 +397,12 @@ function ChatSession({
     });
   };
 
+  const handleStop = () => {
+    activePipelineRef.current?.controller.abort();
+    stop();
+    setAgentHint("Agent: 已取消");
+  };
+
   return (
     <div className="flex h-screen flex-col bg-[#faf9f5] dark:bg-slate-900">
       <header className="border-b border-slate-200/80 bg-white/80 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-950/80 md:px-6">
@@ -354,6 +418,17 @@ function ChatSession({
                 {lastTtftMs === null ? "" : `TTFT ${lastTtftMs}ms`}
               </span>
             </p>
+            {agentRunSummary ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 dark:border-slate-700 dark:bg-slate-900">
+                  Agent {agentRunSummary.status}
+                </span>
+                <span>attempts {agentRunSummary.attempts}</span>
+                <span>{agentRunSummary.durationMs}ms</span>
+                {agentRunSummary.errorCode ? <span>{agentRunSummary.errorCode}</span> : null}
+                {agentRunSummary.adapterMode ? <span>{agentRunSummary.adapterMode}</span> : null}
+              </div>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <ModelSelector
@@ -396,7 +471,7 @@ function ChatSession({
       <main className="flex flex-1 flex-col overflow-hidden">
         <div className="flex-1 overflow-hidden px-4 py-4 md:px-6">
           <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-4">
-            {showAgentPanel ? <AgentMvpPanel /> : null}
+            {showAgentPanel ? <AgentMvpPanel linkedRunSummary={agentRunSummary} /> : null}
             {error ? <ErrorDisplay error={error} onDismiss={clearError} /> : null}
             {localActionError ? <ErrorDisplay error={localActionError} /> : null}
 
@@ -437,7 +512,7 @@ function ChatSession({
               onInputChange={setInput}
               onSubmit={handleSubmit}
               isLoading={isLoading}
-              onStop={stop}
+              onStop={handleStop}
               textareaRef={inputRef}
             />
           </div>

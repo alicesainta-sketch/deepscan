@@ -20,9 +20,6 @@ const RUN_TRANSITIONS: Record<AgentRunState["status"], AgentRunState["status"][]
   cancelled: [],
 };
 
-/**
- * 初始化 run 状态，MVP 默认只挂一个工具步骤。
- */
 export const createInitialRunState = (params: {
   runId: string;
   sessionId: string;
@@ -70,9 +67,6 @@ const updateStep = (
   return state.steps.map((step) => (step.id === stepId ? updater(step) : step));
 };
 
-/**
- * 纯函数 reducer：只负责状态迁移，不执行副作用。
- */
 export const transitionRunState = (
   state: AgentRunState,
   action: AgentAction
@@ -148,7 +142,22 @@ export const transitionRunState = (
     }
     case "CANCEL_RUN": {
       assertRunTransition(state.status, "cancelled");
-      return { ...state, status: "cancelled", endedAt: now, updatedAt: now };
+      return {
+        ...state,
+        status: "cancelled",
+        steps: state.steps.map((step) => {
+          if (step.status === "succeeded" || step.status === "failed") {
+            return step;
+          }
+          return {
+            ...step,
+            status: "skipped",
+            endedAt: step.endedAt ?? now,
+          };
+        }),
+        endedAt: now,
+        updatedAt: now,
+      };
     }
     case "APPEND_EVENT": {
       return {

@@ -6,6 +6,7 @@ import type { AgentRunState } from "./types";
 type RunAgentPipelineParams = {
   sessionId: string;
   input: string;
+  signal?: AbortSignal;
 };
 
 export type AgentPipelineResult = {
@@ -19,9 +20,6 @@ const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_RETRIES = 1;
 const DEFAULT_RETRY_DELAY_MS = 20;
 
-/**
- * 运行聊天前置 Agent 流程，失败时降级为直接对话，避免阻断主链路。
- */
 export const runAgentPipelineForChat = async (
   params: RunAgentPipelineParams
 ): Promise<AgentPipelineResult> => {
@@ -37,6 +35,7 @@ export const runAgentPipelineForChat = async (
       maxRetries: DEFAULT_MAX_RETRIES,
       timeoutMs: DEFAULT_TIMEOUT_MS,
       retryDelayMs: DEFAULT_RETRY_DELAY_MS,
+      signal: params.signal,
     });
 
     const firstStep = runState.steps[0];
@@ -57,7 +56,9 @@ export const runAgentPipelineForChat = async (
       reason:
         runState.status === "succeeded"
           ? undefined
-          : runState.lastError?.message ?? "agent run failed",
+          : runState.status === "cancelled"
+            ? "agent run cancelled"
+            : runState.lastError?.message ?? "agent run failed",
     };
   } catch (error) {
     return {

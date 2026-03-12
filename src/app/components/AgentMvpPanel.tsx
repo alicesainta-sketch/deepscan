@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createAgentAdapter } from "@/lib/agent/createAdapter";
 import { getAgentAdapterMode, getAgentApiBaseUrl, getAgentToolName } from "@/lib/agent/config";
 import { runAgent } from "@/lib/agent/runner";
-import type { AgentRunState } from "@/lib/agent/types";
+import type { AgentErrorCode, AgentRunState, AgentRunStatus } from "@/lib/agent/types";
 
 type AgentScenario = "success" | "timeout" | "retry_exhausted" | "remote_call";
 
@@ -19,9 +19,16 @@ type ScenarioConfig = {
 
 type ScenarioMap = Partial<Record<AgentScenario, ScenarioConfig>>;
 
-/**
- * 将状态值映射为统一徽标样式，避免页面里散落大量条件类名判断。
- */
+type LinkedRunSummary = {
+  status: AgentRunStatus;
+  attempts: number;
+  durationMs: number;
+  degraded: boolean;
+  summary?: string;
+  adapterMode?: "mock" | "http";
+  errorCode?: AgentErrorCode;
+};
+
 const getStatusBadgeClass = (status: string) => {
   if (status === "succeeded") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-700/60 dark:bg-emerald-900/20 dark:text-emerald-300";
@@ -35,10 +42,11 @@ const getStatusBadgeClass = (status: string) => {
   return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
 };
 
-/**
- * Agent MVP 演示面板：展示本地状态机、mock adapter 和三条核心测试路径。
- */
-export default function AgentMvpPanel() {
+export default function AgentMvpPanel({
+  linkedRunSummary,
+}: {
+  linkedRunSummary?: LinkedRunSummary | null;
+}) {
   const adapterMode = useMemo(() => getAgentAdapterMode(), []);
   const configuredApiBaseUrl = useMemo(() => getAgentApiBaseUrl(), []);
   const configuredToolName = useMemo(() => getAgentToolName(), []);
@@ -54,6 +62,7 @@ export default function AgentMvpPanel() {
     baseUrl?: string;
     toolName?: string;
   } | null>(null);
+  const activeControllerRef = useRef<AbortController | null>(null);
 
   const scenarioConfig = useMemo<ScenarioMap>(
     () =>
@@ -105,6 +114,8 @@ export default function AgentMvpPanel() {
     setRunDurationMs(null);
     setIsRunning(true);
     const startedAt = performance.now();
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
     try {
       const resolvedAdapter =
         adapterMode === "http"
@@ -131,6 +142,7 @@ export default function AgentMvpPanel() {
         maxRetries: selectedScenario.maxRetries,
         timeoutMs: selectedScenario.timeoutMs,
         retryDelayMs: selectedScenario.retryDelayMs,
+        signal: controller.signal,
       });
       setRunState(result);
       setRunDurationMs(Math.round(performance.now() - startedAt));
@@ -139,6 +151,9 @@ export default function AgentMvpPanel() {
       setRunState(null);
       setRunDurationMs(Math.round(performance.now() - startedAt));
     } finally {
+      if (activeControllerRef.current === controller) {
+        activeControllerRef.current = null;
+      }
       setIsRunning(false);
     }
   };
@@ -169,8 +184,31 @@ export default function AgentMvpPanel() {
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] text-amber-700 dark:border-amber-700/60 dark:bg-amber-900/20 dark:text-amber-300">
             MVP：单 run / 单 step / 单工具调用
           </div>
+          {isRunning ? (
+            <button
+              type="button"
+              onClick={() => activeControllerRef.current?.abort()}
+              className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] text-red-700 transition hover:bg-red-100 dark:border-red-700/60 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/40"
+            >
+              取消运行
+            </button>
+          ) : null}
         </div>
       </div>
+
+      {linkedRunSummary ? (
+        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
+          <p>主聊天最近一次 Agent：{linkedRunSummary.status}</p>
+          <p className="mt-1">
+            attempts：{linkedRunSummary.attempts} / duration：{linkedRunSummary.durationMs}ms
+            {linkedRunSummary.errorCode ? ` / ${linkedRunSummary.errorCode}` : ""}
+          </p>
+          <p className="mt-1">
+            {linkedRunSummary.adapterMode ? `${linkedRunSummary.adapterMode} / ` : ""}
+            {linkedRunSummary.summary ?? (linkedRunSummary.degraded ? "已降级" : "暂无摘要")}
+          </p>
+        </div>
+      ) : null}
 
       {isHttpMode ? (
         <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
