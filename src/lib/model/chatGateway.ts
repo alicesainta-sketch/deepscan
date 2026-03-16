@@ -1,6 +1,8 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { convertToModelMessages, streamText, type UIMessage } from "ai";
+
 import type { AgentPipelineContext } from "@/lib/agent/pipelineContext";
+
 import { normalizeChatModel, type SupportedChatModel } from "./models";
 
 type ChatGatewayConfig = {
@@ -21,9 +23,7 @@ export type NormalizedChatPayload = {
 
 const BASE_SYSTEM_PROMPT = "You are a helpful assistant.";
 
-export const resolveChatGatewayConfig = (
-  env?: ChatGatewayEnv
-): ChatGatewayConfig => {
+export const resolveChatGatewayConfig = (env?: ChatGatewayEnv): ChatGatewayConfig => {
   const resolvedEnv = env ?? (process.env as unknown as ChatGatewayEnv);
   const apiKey = resolvedEnv.DEEPSEEK_API_KEY?.trim();
   const baseURL = resolvedEnv.BASE_URL?.trim();
@@ -65,17 +65,13 @@ export const normalizeChatPayload = (body: unknown): NormalizedChatPayload => {
       : {};
 
   return {
-    messages: Array.isArray(payload.messages)
-      ? (payload.messages as UIMessage[])
-      : [],
+    messages: Array.isArray(payload.messages) ? (payload.messages as UIMessage[]) : [],
     model: normalizeChatModel(payload.model),
     agentContext: parseAgentContext(payload.agentContext),
   };
 };
 
-export const buildSystemPrompt = (
-  agentContext: AgentPipelineContext | null
-): string => {
+export const buildSystemPrompt = (agentContext: AgentPipelineContext | null): string => {
   if (!agentContext) {
     return BASE_SYSTEM_PROMPT;
   }
@@ -98,7 +94,7 @@ export const buildSystemPrompt = (
 
 export const streamChatWithGateway = async (
   payload: NormalizedChatPayload,
-  config?: ChatGatewayConfig
+  config?: ChatGatewayConfig,
 ) => {
   const { apiKey, baseURL } = config ?? resolveChatGatewayConfig();
   const provider = createOpenAICompatible({

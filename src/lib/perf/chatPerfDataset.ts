@@ -1,10 +1,8 @@
 import type { UIMessage } from "ai";
 
-const SAMPLE_CODE = [
-  "```ts",
-  "export const sum = (a: number, b: number) => a + b;",
-  "```",
-].join("\n");
+const SAMPLE_CODE = ["```ts", "export const sum = (a: number, b: number) => a + b;", "```"].join(
+  "\n",
+);
 
 export const buildSyntheticMessages = (turnCount: number): UIMessage[] => {
   const normalizedTurns = Math.max(1, Math.floor(turnCount));

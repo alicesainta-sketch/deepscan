@@ -1,7 +1,4 @@
-import {
-  isAgentAdapterError,
-  type AgentAdapter,
-} from "./adapter";
+import { type AgentAdapter, isAgentAdapterError } from "./adapter";
 import { createInitialRunState, transitionRunState } from "./stateMachine";
 import type { AgentError, AgentRunState } from "./types";
 
@@ -54,7 +51,7 @@ const getRetryDelay = (baseDelayMs: number, attempt: number) => {
 const withTimeout = async <T>(
   task: Promise<T>,
   timeoutMs: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<T> => {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(buildTimeoutError()), timeoutMs);
@@ -173,7 +170,7 @@ export const runAgent = async (params: RunParams): Promise<AgentRunState> => {
           signal: params.signal,
         }),
         timeoutMs,
-        params.signal
+        params.signal,
       );
 
       dispatch({ type: "COMPLETE_STEP", stepId, summary: result.summary });

@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { UIMessage } from "ai";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import AgentMvpPanel from "@/app/components/AgentMvpPanel";
 import ErrorDisplay from "@/app/components/ErrorDisplay";
 import InputField from "@/app/components/InputField";
@@ -14,10 +15,10 @@ import ModelSelector from "@/app/components/ModelSelector";
 import { IconFlask, IconMoon, IconSun } from "@/components/icons";
 import { useTheme } from "@/components/ThemeProvider";
 import { runAgentPipelineForChat } from "@/lib/agent/chatPipeline";
-import { createLocalChat, getChatScope, updateLocalChat } from "@/lib/chatStore";
+import type { AgentErrorCode, AgentRunStatus } from "@/lib/agent/types";
 import { getFirstUserMessageText, getMessageText } from "@/lib/chatMessages";
 import { readStoredMessages, writeStoredMessages } from "@/lib/chatMessageStorage";
-import type { AgentErrorCode, AgentRunStatus } from "@/lib/agent/types";
+import { createLocalChat, getChatScope, updateLocalChat } from "@/lib/chatStore";
 import { setGlobalChatModel, useGlobalChatModel } from "@/lib/model/globalModel";
 import { recordClientEvent } from "@/lib/observability/clientEvents";
 import { useHydrated } from "@/lib/useHydrated";
@@ -117,7 +118,7 @@ function ChatSession({
   const isLoading = status === "streaming" || status === "submitted";
   const firstUserTitle = useMemo(
     () => getFirstUserMessageText(safeMessages).slice(0, 40) || "新对话",
-    [safeMessages]
+    [safeMessages],
   );
   const latestAssistantTextLength = useMemo(() => {
     for (let index = safeMessages.length - 1; index >= 0; index -= 1) {
@@ -199,7 +200,7 @@ function ChatSession({
       const query = new URLSearchParams({ q: text }).toString();
       router.replace(`/chat/${created.id}?${query}`);
     },
-    [chatScope, globalModel, queryClient, router]
+    [chatScope, globalModel, queryClient, router],
   );
 
   const sendWithPipeline = useCallback(
@@ -208,7 +209,7 @@ function ChatSession({
       options?: {
         mode: "send" | "regenerate";
         assistantMessageId?: string;
-      }
+      },
     ) => {
       const requestId = `req_${Date.now()}_${Math.random().toString(16).slice(2)}`;
       const previousPipeline = activePipelineRef.current;
@@ -303,7 +304,7 @@ function ChatSession({
 
       sendMessage({ text }, { body: requestBody });
     },
-    [globalModel, regenerate, sendMessage, sessionId]
+    [globalModel, regenerate, sendMessage, sessionId],
   );
 
   useEffect(() => {
@@ -313,9 +314,7 @@ function ChatSession({
     if (autoSend && !hasAutoSentRef.current) {
       hasAutoSentRef.current = true;
       void createChatAndRedirect(initialPrompt.trim()).catch((submitError) => {
-        setLocalActionError(
-          submitError instanceof Error ? submitError.message : "创建会话失败"
-        );
+        setLocalActionError(submitError instanceof Error ? submitError.message : "创建会话失败");
       });
     }
   }, [autoSend, createChatAndRedirect, initialPrompt, isDraftSession]);
@@ -332,14 +331,7 @@ function ChatSession({
       void sendWithPipeline(prompt);
     });
     router.replace(`/chat/${routeChatId}`);
-  }, [
-    initialPrompt,
-    isDraftSession,
-    messageCount,
-    routeChatId,
-    router,
-    sendWithPipeline,
-  ]);
+  }, [initialPrompt, isDraftSession, messageCount, routeChatId, router, sendWithPipeline]);
 
   useEffect(() => {
     if (isDraftSession) return;
@@ -374,9 +366,7 @@ function ChatSession({
 
     if (isDraftSession) {
       void createChatAndRedirect(text).catch((submitError) => {
-        setLocalActionError(
-          submitError instanceof Error ? submitError.message : "创建会话失败"
-        );
+        setLocalActionError(submitError instanceof Error ? submitError.message : "创建会话失败");
       });
       return;
     }
@@ -405,7 +395,7 @@ function ChatSession({
 
   return (
     <div className="flex h-screen flex-col bg-[#faf9f5] dark:bg-slate-900">
-      <header className="border-b border-slate-200/80 bg-white/80 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-950/80 md:px-6">
+      <header className="border-b border-slate-200/80 bg-white/80 px-4 py-3 backdrop-blur md:px-6 dark:border-slate-700 dark:bg-slate-950/80">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-sm font-semibold tracking-wide text-slate-800 dark:text-slate-100">
@@ -505,7 +495,7 @@ function ChatSession({
           </div>
         </div>
 
-        <div className="border-t border-slate-200/80 bg-[#faf9f5] px-4 py-4 dark:border-slate-700 dark:bg-slate-900 md:px-6">
+        <div className="border-t border-slate-200/80 bg-[#faf9f5] px-4 py-4 md:px-6 dark:border-slate-700 dark:bg-slate-900">
           <div className="mx-auto w-full max-w-4xl">
             <InputField
               input={input}

@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildSystemPrompt,
-  normalizeChatPayload,
-  resolveChatGatewayConfig,
-} from "./chatGateway";
+
+import { buildSystemPrompt, normalizeChatPayload, resolveChatGatewayConfig } from "./chatGateway";
 
 describe("chatGateway", () => {
   it("normalizes payload model and messages", () => {
@@ -59,14 +56,14 @@ describe("chatGateway", () => {
       resolveChatGatewayConfig({
         DEEPSEEK_API_KEY: "key",
         BASE_URL: "https://api.deepseek.com/v1",
-      })
+      }),
     ).not.toThrow();
 
     expect(() =>
       resolveChatGatewayConfig({
         DEEPSEEK_API_KEY: "",
         BASE_URL: "",
-      })
+      }),
     ).toThrow("Missing DEEPSEEK_API_KEY or BASE_URL");
   });
 });

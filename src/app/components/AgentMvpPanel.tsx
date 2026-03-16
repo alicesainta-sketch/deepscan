@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { createAgentAdapter } from "@/lib/agent/createAdapter";
+
 import { getAgentAdapterMode, getAgentApiBaseUrl, getAgentToolName } from "@/lib/agent/config";
+import { createAgentAdapter } from "@/lib/agent/createAdapter";
 import { runAgent } from "@/lib/agent/runner";
 import type { AgentErrorCode, AgentRunState, AgentRunStatus } from "@/lib/agent/types";
 
@@ -51,7 +52,7 @@ export default function AgentMvpPanel({
   const configuredApiBaseUrl = useMemo(() => getAgentApiBaseUrl(), []);
   const configuredToolName = useMemo(() => getAgentToolName(), []);
   const [activeScenario, setActiveScenario] = useState<AgentScenario>(
-    adapterMode === "http" ? "remote_call" : "success"
+    adapterMode === "http" ? "remote_call" : "success",
   );
   const [isRunning, setIsRunning] = useState(false);
   const [runState, setRunState] = useState<AgentRunState | null>(null);
@@ -102,7 +103,7 @@ export default function AgentMvpPanel({
               mockMode: "fail",
             },
           },
-    [adapterMode]
+    [adapterMode],
   );
 
   const runScenario = async (scenario: AgentScenario) => {
@@ -161,7 +162,7 @@ export default function AgentMvpPanel({
   const stepState = runState?.steps[0] ?? null;
   const scenarioList = useMemo(
     () => Object.entries(scenarioConfig) as Array<[AgentScenario, ScenarioConfig]>,
-    [scenarioConfig]
+    [scenarioConfig],
   );
   const isHttpMode = adapterMode === "http";
   const isHttpConfigured = !isHttpMode || Boolean(configuredApiBaseUrl);
@@ -170,7 +171,9 @@ export default function AgentMvpPanel({
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Agent MVP 演示面板</h2>
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+            Agent MVP 演示面板
+          </h2>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {isHttpMode
               ? "当前为 HTTP 联调模式：将调用后端 MCP 工具接口。"
@@ -246,7 +249,9 @@ export default function AgentMvpPanel({
               <p className="text-sm font-medium">{config.label}</p>
               <p
                 className={`mt-1 text-xs ${
-                  isActive ? "text-slate-200 dark:text-slate-600" : "text-slate-500 dark:text-slate-400"
+                  isActive
+                    ? "text-slate-200 dark:text-slate-600"
+                    : "text-slate-500 dark:text-slate-400"
                 }`}
               >
                 {config.description}
@@ -264,14 +269,16 @@ export default function AgentMvpPanel({
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/70">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Run 状态</p>
+          <p className="text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">
+            Run 状态
+          </p>
           <div className="mt-2 flex items-center gap-2">
             <span
               className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(
-                runState?.status ?? "idle"
+                runState?.status ?? "idle",
               )}`}
             >
-              {isRunning ? "running" : runState?.status ?? "idle"}
+              {isRunning ? "running" : (runState?.status ?? "idle")}
             </span>
             <span className="text-xs text-slate-500 dark:text-slate-400">
               events：{runState?.events.length ?? 0}
@@ -286,16 +293,16 @@ export default function AgentMvpPanel({
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/70">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <p className="text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">
             Step 状态
           </p>
           <div className="mt-2 flex items-center gap-2">
             <span
               className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(
-                stepState?.status ?? "pending"
+                stepState?.status ?? "pending",
               )}`}
             >
-              {isRunning ? "running" : stepState?.status ?? "pending"}
+              {isRunning ? "running" : (stepState?.status ?? "pending")}
             </span>
             <span className="text-xs text-slate-500 dark:text-slate-400">
               attempts：{stepState?.attempt ?? 0}
@@ -314,7 +321,7 @@ export default function AgentMvpPanel({
       </div>
 
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        <p className="text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">
           事件轨迹（最近一次执行）
         </p>
         {runState?.events.length ? (

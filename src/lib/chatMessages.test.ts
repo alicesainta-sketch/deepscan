@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
 import type { UIMessage } from "ai";
+import { describe, expect, it } from "vitest";
+
 import {
-  getMessageText,
   getFirstUserMessageText,
   getLastUserMessageText,
+  getMessageText,
   hasAssistantResponse,
 } from "./chatMessages";
 

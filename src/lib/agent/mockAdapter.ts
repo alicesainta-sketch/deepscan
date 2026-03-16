@@ -1,4 +1,4 @@
-import type { AgentAdapter, AdapterContext, AdapterResult } from "./adapter";
+import type { AdapterContext, AdapterResult, AgentAdapter } from "./adapter";
 
 export type MockAdapterMode = "success" | "timeout" | "fail";
 

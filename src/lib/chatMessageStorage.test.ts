@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "ai";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import {
   readStoredMessages,
   removeStoredMessages,
@@ -19,7 +20,7 @@ const createStorageMock = (): StorageMock => {
   const map = new Map<string, string>();
   return {
     clear: () => map.clear(),
-    getItem: (key: string) => (map.has(key) ? map.get(key) ?? null : null),
+    getItem: (key: string) => (map.has(key) ? (map.get(key) ?? null) : null),
     key: (index: number) => Array.from(map.keys())[index] ?? null,
     get length() {
       return map.size;

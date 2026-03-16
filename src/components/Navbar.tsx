@@ -3,6 +3,17 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+
+import {
+  IconCheck,
+  IconChevronsLeft,
+  IconChevronsRight,
+  IconClose,
+  IconMessage,
+  IconPencil,
+  IconPlus,
+  IconTrash,
+} from "@/components/icons";
 import {
   createLocalChat,
   deleteLocalChat,
@@ -12,16 +23,6 @@ import {
 } from "@/lib/chatStore";
 import { useGlobalChatModel } from "@/lib/model/globalModel";
 import type { ChatModel } from "@/types/chat";
-import {
-  IconCheck,
-  IconChevronsLeft,
-  IconChevronsRight,
-  IconMessage,
-  IconPencil,
-  IconPlus,
-  IconTrash,
-  IconClose,
-} from "@/components/icons";
 
 type NavbarProps = {
   collapsed: boolean;
@@ -137,11 +138,7 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
 
   const renderCollapsedList = () => {
     if (isLoading) {
-      return (
-        <div className="px-2 text-center text-xs text-slate-400 dark:text-slate-500">
-          ...
-        </div>
-      );
+      return <div className="px-2 text-center text-xs text-slate-400 dark:text-slate-500">...</div>;
     }
     if (isError) {
       return (
@@ -159,11 +156,7 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
       );
     }
     if (chatList.length === 0) {
-      return (
-        <div className="px-2 text-center text-xs text-slate-400 dark:text-slate-500">
-          无
-        </div>
-      );
+      return <div className="px-2 text-center text-xs text-slate-400 dark:text-slate-500">无</div>;
     }
 
     return chatList.map((chat) => {
@@ -188,7 +181,7 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
 
   return (
     <div className="flex h-full flex-col border-r border-slate-200/80 bg-[#f7f6f3] dark:border-slate-700 dark:bg-slate-950">
-      <div className={`pb-3 pt-4 ${collapsed ? "px-2" : "px-4"}`}>
+      <div className={`pt-4 pb-3 ${collapsed ? "px-2" : "px-4"}`}>
         <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
           {!collapsed ? (
             <div>
@@ -202,7 +195,11 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
             aria-label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
             className="hidden rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition hover:bg-slate-100 md:inline-flex dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
           >
-            {collapsed ? <IconChevronsRight size={16} aria-hidden /> : <IconChevronsLeft size={16} aria-hidden />}
+            {collapsed ? (
+              <IconChevronsRight size={16} aria-hidden />
+            ) : (
+              <IconChevronsLeft size={16} aria-hidden />
+            )}
           </button>
         </div>
       </div>
@@ -224,12 +221,14 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
         </button>
       </div>
 
-      <div className={`mt-4 flex-1 overflow-y-auto ${collapsed ? "space-y-2 px-2" : "space-y-1 px-3"}`}>
+      <div
+        className={`mt-4 flex-1 overflow-y-auto ${collapsed ? "space-y-2 px-2" : "space-y-1 px-3"}`}
+      >
         {collapsed ? (
           renderCollapsedList()
         ) : (
           <>
-            <p className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+            <p className="px-1 pb-1 text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase dark:text-slate-400">
               历史会话
             </p>
 
@@ -368,11 +367,11 @@ export default function Navbar({ collapsed, onToggleCollapse }: NavbarProps) {
         )}
       </div>
 
-      <div className={`border-t border-slate-200 p-3 dark:border-slate-700 ${collapsed ? "space-y-2" : "space-y-2"}`}>
+      <div
+        className={`border-t border-slate-200 p-3 dark:border-slate-700 ${collapsed ? "space-y-2" : "space-y-2"}`}
+      >
         {!collapsed ? (
-          <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            默认模式
-          </p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">默认模式</p>
         ) : null}
       </div>
     </div>

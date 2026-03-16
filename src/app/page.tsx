@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+
 import { IconArrowRight } from "@/components/icons";
 
 export default function Home() {
@@ -16,9 +17,9 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-full items-center justify-center overflow-auto bg-[#f4f2ec] px-4 py-8 dark:bg-slate-900 md:px-8">
-      <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_24px_60px_-35px_rgba(15,23,42,0.45)] dark:border-slate-700 dark:bg-slate-950 md:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+    <div className="flex h-full items-center justify-center overflow-auto bg-[#f4f2ec] px-4 py-8 md:px-8 dark:bg-slate-900">
+      <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_24px_60px_-35px_rgba(15,23,42,0.45)] md:p-8 dark:border-slate-700 dark:bg-slate-950">
+        <p className="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase dark:text-slate-400">
           DeepScan
         </p>
         <h1 className="mt-2 text-3xl font-semibold text-slate-900 dark:text-slate-100">
@@ -39,10 +40,12 @@ export default function Home() {
               }
             }}
             placeholder="你想讨论什么？"
-            className="h-36 w-full resize-none rounded-xl border border-transparent bg-white px-4 py-3 text-slate-800 outline-none transition focus:border-slate-200 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-700"
+            className="h-36 w-full resize-none rounded-xl border border-transparent bg-white px-4 py-3 text-slate-800 transition outline-none focus:border-slate-200 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-700"
           />
           <div className="mt-3 flex items-center justify-between">
-            <p className="text-xs text-slate-500 dark:text-slate-400">Enter 发送，Shift + Enter 换行</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Enter 发送，Shift + Enter 换行
+            </p>
             <button
               type="button"
               onClick={handleSubmit}

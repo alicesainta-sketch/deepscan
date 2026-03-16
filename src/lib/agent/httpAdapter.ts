@@ -1,8 +1,8 @@
 import {
-  AgentAdapterError,
   type AdapterContext,
   type AdapterResult,
   type AgentAdapter,
+  AgentAdapterError,
 } from "./adapter";
 import type { AgentErrorCode } from "./types";
 
@@ -47,7 +47,7 @@ const normalizeSuccessPayload = (payload: unknown): AdapterResult => {
 
 const normalizeErrorPayload = (
   payload: unknown,
-  status: number
+  status: number,
 ): {
   code: AgentErrorCode;
   message: string;

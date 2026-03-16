@@ -16,6 +16,7 @@ flowchart TD
 ```
 
 源码定位：
+
 - `src/app/layout.tsx`：全局布局、主题与 Query Provider。
 - `src/components/AppShell.tsx`：两栏骨架与侧边栏折叠状态。
 - `src/app/page.tsx`：首页输入后跳转 `/chat/new?q=...`。
@@ -47,6 +48,7 @@ sequenceDiagram
 ```
 
 源码定位：
+
 - `src/app/components/InputField.tsx`：输入、提交与停止按钮。
 - `src/app/chat/[chat_id]/page.tsx`：发送逻辑、流式状态、会话创建与跳转。
 - `src/app/components/MessageList.tsx`：助手/用户消息渲染与代码块复制。
@@ -76,6 +78,7 @@ sequenceDiagram
 ```
 
 源码定位：
+
 - `src/components/Navbar.tsx`：会话列表操作。
 - `src/lib/chatStore.ts`：会话元信息读写与排序。
 
@@ -87,6 +90,7 @@ sequenceDiagram
 - `deepscan:sidebar-collapsed`：侧边栏折叠状态。
 
 恢复流程：
+
 1. 进入 `/chat/[chat_id]` 时读取会话 ID。
 2. 从 `deepscan:chat:<sessionId>:messages` 拉取历史消息。
 3. 渲染消息列表并继续在同一会话上下文发送。

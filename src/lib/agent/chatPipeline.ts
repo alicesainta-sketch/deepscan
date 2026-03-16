@@ -21,7 +21,7 @@ const DEFAULT_MAX_RETRIES = 1;
 const DEFAULT_RETRY_DELAY_MS = 20;
 
 export const runAgentPipelineForChat = async (
-  params: RunAgentPipelineParams
+  params: RunAgentPipelineParams,
 ): Promise<AgentPipelineResult> => {
   const startedAt = performance.now();
 
@@ -58,7 +58,7 @@ export const runAgentPipelineForChat = async (
           ? undefined
           : runState.status === "cancelled"
             ? "agent run cancelled"
-            : runState.lastError?.message ?? "agent run failed",
+            : (runState.lastError?.message ?? "agent run failed"),
     };
   } catch (error) {
     return {

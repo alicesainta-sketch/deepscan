@@ -1,12 +1,12 @@
 "use client";
 
-import { memo, useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
 import type { UIMessage } from "ai";
+import { type HTMLAttributes, memo, type ReactNode, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { Virtuoso } from "react-virtuoso";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { Virtuoso } from "react-virtuoso";
+import remarkGfm from "remark-gfm";
 
 type MessageListProps = {
   messages: UIMessage[];
@@ -17,9 +17,7 @@ type MessageListProps = {
 };
 
 const getMessageContent = (message: UIMessage) => {
-  return message.parts
-    .map((part) => (part.type === "text" ? part.text : ""))
-    .join("");
+  return message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
 };
 
 function CodeBlock({ code, language }: { code: string; language: string }) {
@@ -63,7 +61,7 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
       <button
         type="button"
         onClick={handleCopyCode}
-        className="absolute right-2 top-2 z-10 rounded-md border border-slate-500/30 bg-slate-900/70 px-2 py-1 text-[11px] text-slate-100 opacity-0 transition group-hover:opacity-100"
+        className="absolute top-2 right-2 z-10 rounded-md border border-slate-500/30 bg-slate-900/70 px-2 py-1 text-[11px] text-slate-100 opacity-0 transition group-hover:opacity-100"
       >
         {copied ? "已复制" : "复制"}
       </button>
@@ -170,7 +168,7 @@ const MessageCard = memo(function MessageCard({
         </div>
 
         {isAssistant ? (
-          <div className="prose prose-sm max-w-none break-words dark:prose-invert prose-pre:bg-transparent">
+          <div className="prose prose-sm dark:prose-invert prose-pre:bg-transparent max-w-none break-words">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
@@ -216,7 +214,7 @@ const MessageCard = memo(function MessageCard({
             </ReactMarkdown>
           </div>
         ) : (
-          <p className="whitespace-pre-wrap text-sm leading-6">{content}</p>
+          <p className="text-sm leading-6 whitespace-pre-wrap">{content}</p>
         )}
       </div>
     </article>
