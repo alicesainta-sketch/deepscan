@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent } from "react";
+import { type FormEvent } from "react";
+
 import { IconArrowRight, IconStop } from "@/components/icons";
 
 type InputFieldProps = {
@@ -46,9 +47,7 @@ export default function InputField({
         className="w-full resize-none bg-transparent px-1 text-sm leading-6 text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
       />
       <div className="mt-2 flex items-center justify-between">
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          Enter 发送，Shift + Enter 换行
-        </p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">Enter 发送，Shift + Enter 换行</p>
         {isLoading && onStop ? (
           <button
             type="button"

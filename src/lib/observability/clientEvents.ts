@@ -25,10 +25,7 @@ const readEvents = (): ClientEventRecord[] => {
   }
 };
 
-export const recordClientEvent = (
-  name: string,
-  payload: ClientEventPayload = {}
-) => {
+export const recordClientEvent = (name: string, payload: ClientEventPayload = {}) => {
   if (typeof window === "undefined") return;
   const record: ClientEventRecord = {
     id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,

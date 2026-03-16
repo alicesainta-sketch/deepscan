@@ -1,7 +1,7 @@
 packages:
   - .
-  
+
 ignoredBuiltDependencies:
-  - '@clerk/shared'
+  - "@clerk/shared"
   - sharp
   - unrs-resolver

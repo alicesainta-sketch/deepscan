@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import {
   createLocalChat,
   deleteLocalChat,
@@ -26,7 +27,7 @@ const createStorageMock = (): StorageMock => {
       store.clear();
     },
     getItem: (key: string) => {
-      return store.has(key) ? store.get(key) ?? null : null;
+      return store.has(key) ? (store.get(key) ?? null) : null;
     },
     key: (index: number) => {
       return Array.from(store.keys())[index] ?? null;

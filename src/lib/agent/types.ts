@@ -1,17 +1,6 @@
-export type AgentRunStatus =
-  | "idle"
-  | "queued"
-  | "running"
-  | "succeeded"
-  | "failed"
-  | "cancelled";
+export type AgentRunStatus = "idle" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
-export type AgentStepStatus =
-  | "pending"
-  | "running"
-  | "succeeded"
-  | "failed"
-  | "skipped";
+export type AgentStepStatus = "pending" | "running" | "succeeded" | "failed" | "skipped";
 
 export type AgentErrorCode =
   | "TOOL_TIMEOUT"

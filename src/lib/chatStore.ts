@@ -1,14 +1,12 @@
 import type { UIMessage } from "ai";
-import type { ChatModel } from "@/types/chat";
-import {
-  normalizeChatModel,
-  type SupportedChatModel,
-} from "@/lib/model/models";
+
 import {
   readStoredMessages,
   removeStoredMessages,
   writeStoredMessages,
 } from "@/lib/chatMessageStorage";
+import { normalizeChatModel, type SupportedChatModel } from "@/lib/model/models";
+import type { ChatModel } from "@/types/chat";
 
 const CHAT_STORE_KEY = "deepscan:chat-store";
 const LEGACY_CHAT_STORE_KEY = "deepscan:chat-store:v1";
@@ -67,19 +65,15 @@ const normalizeChatsByScope = (sourceScopes: unknown) => {
   let maxChatId = 0;
 
   if (sourceScopes && typeof sourceScopes === "object") {
-    Object.entries(sourceScopes as Record<string, unknown>).forEach(
-      ([scope, chats]) => {
-        const normalizedChats = Array.isArray(chats)
-          ? chats.map((chat, index) =>
-              normalizeChat(chat as Partial<ChatModel>, index + 1)
-            )
-          : [];
-        normalizedChats.forEach((chat) => {
-          if (chat.id > maxChatId) maxChatId = chat.id;
-        });
-        chatsByScope[scope] = sortChats(normalizedChats);
-      }
-    );
+    Object.entries(sourceScopes as Record<string, unknown>).forEach(([scope, chats]) => {
+      const normalizedChats = Array.isArray(chats)
+        ? chats.map((chat, index) => normalizeChat(chat as Partial<ChatModel>, index + 1))
+        : [];
+      normalizedChats.forEach((chat) => {
+        if (chat.id > maxChatId) maxChatId = chat.id;
+      });
+      chatsByScope[scope] = sortChats(normalizedChats);
+    });
   }
 
   return { chatsByScope, maxChatId };
@@ -95,18 +89,14 @@ const migrateStore = (raw: unknown): ChatStoreState => {
   };
 
   const storedVersion = coerceVersion(candidate.version);
-  const { chatsByScope, maxChatId } = normalizeChatsByScope(
-    candidate.chatsByScope
-  );
+  const { chatsByScope, maxChatId } = normalizeChatsByScope(candidate.chatsByScope);
   const storedNextChatId =
-    typeof candidate.nextChatId === "number" && candidate.nextChatId > 0
-      ? candidate.nextChatId
-      : 1;
+    typeof candidate.nextChatId === "number" && candidate.nextChatId > 0 ? candidate.nextChatId : 1;
   const nextChatId = Math.max(storedNextChatId, maxChatId + 1);
 
   if (storedVersion > CHAT_STORE_VERSION) {
     console.warn(
-      `Chat store version ${storedVersion} is newer than supported ${CHAT_STORE_VERSION}.`
+      `Chat store version ${storedVersion} is newer than supported ${CHAT_STORE_VERSION}.`,
     );
   }
 
@@ -129,9 +119,7 @@ const readStore = (): ChatStoreState => {
     const parsed = JSON.parse(source) as unknown;
     const migrated = migrateStore(parsed);
 
-    const storedVersion = coerceVersion(
-      (parsed as { version?: unknown })?.version
-    );
+    const storedVersion = coerceVersion((parsed as { version?: unknown })?.version);
     if (legacyRaw || storedVersion !== CHAT_STORE_VERSION) {
       writeStore(migrated);
       if (legacyRaw) {
@@ -162,7 +150,7 @@ export const createLocalChat = async (
   payload: {
     title: string;
     model: SupportedChatModel;
-  }
+  },
 ) => {
   const store = readStore();
   const now = Date.now();
@@ -192,7 +180,7 @@ export const updateLocalChat = async (
     title?: string;
     pinned?: boolean;
     model?: SupportedChatModel;
-  }
+  },
 ) => {
   const store = readStore();
   const chats = store.chatsByScope[scope] ?? [];
@@ -200,8 +188,7 @@ export const updateLocalChat = async (
   if (chatIndex < 0) return null;
 
   const chat = chats[chatIndex];
-  const nextTitle =
-    typeof payload.title === "string" ? payload.title.trim() : chat.title;
+  const nextTitle = typeof payload.title === "string" ? payload.title.trim() : chat.title;
   if (!nextTitle) return null;
 
   const updated: ChatModel = {
@@ -232,9 +219,7 @@ export const deleteLocalChat = async (scope: string, chatId: number) => {
   return true;
 };
 
-export const exportLocalChats = async (
-  scope: string
-): Promise<ChatExportPayload> => {
+export const exportLocalChats = async (scope: string): Promise<ChatExportPayload> => {
   const chats = await listChats(scope);
   const messagesByChatId: Record<string, UIMessage[]> = {};
   chats.forEach((chat) => {
@@ -257,7 +242,7 @@ export const exportLocalChats = async (
 export const importLocalChats = async (
   scope: string,
   payload: unknown,
-  mode: "merge" | "replace" = "merge"
+  mode: "merge" | "replace" = "merge",
 ) => {
   if (!payload || typeof payload !== "object") {
     throw new Error("导入文件格式无效");
@@ -284,7 +269,7 @@ export const importLocalChats = async (
     });
   }
   const importedChats = candidate.chats.map((rawChat, index) =>
-    normalizeChat(rawChat as Partial<ChatModel>, index + 1)
+    normalizeChat(rawChat as Partial<ChatModel>, index + 1),
   );
 
   const idMap = new Map<number, number>();
@@ -300,8 +285,7 @@ export const importLocalChats = async (
   });
 
   const currentChats = store.chatsByScope[scope] ?? [];
-  const nextChats =
-    mode === "replace" ? withFreshIds : [...withFreshIds, ...currentChats];
+  const nextChats = mode === "replace" ? withFreshIds : [...withFreshIds, ...currentChats];
 
   store.chatsByScope[scope] = sortChats(nextChats);
   writeStore(store);
@@ -314,7 +298,7 @@ export const importLocalChats = async (
         const newId = idMap.get(oldId);
         if (!newId || !Array.isArray(rawMessages)) return;
         writeStoredMessages(String(newId), rawMessages as UIMessage[]);
-      }
+      },
     );
   }
 

@@ -21,7 +21,4 @@ export const getLastUserMessageText = (messages: UIMessage[]) => {
 };
 
 export const hasAssistantResponse = (messages: UIMessage[]) =>
-  messages.some(
-    (message) =>
-      message.role === "assistant" && getMessageText(message).length > 0
-  );
+  messages.some((message) => message.role === "assistant" && getMessageText(message).length > 0);

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentAdapterError } from "./adapter";
+
+import { type AgentAdapterError } from "./adapter";
 import { HttpAgentAdapter } from "./httpAdapter";
 
 const buildContext = () => ({
@@ -41,7 +42,7 @@ describe("httpAgentAdapter", () => {
       "https://api.example.com/v1/mcp/tools/deepscan.search/invoke",
       expect.objectContaining({
         method: "POST",
-      })
+      }),
     );
   });
 

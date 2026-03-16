@@ -5,6 +5,7 @@
 当前版本仍使用 Next.js 内置 `/api/chat` 作为服务端代理。
 
 环境变量：
+
 - `DEEPSEEK_API_KEY`：模型 API Key
 - `BASE_URL`：OpenAI-compatible 接口地址（例如 `https://api.deepseek.com/v1`）
 - `NEXT_PUBLIC_AGENT_ADAPTER`：Agent adapter 模式（`mock` 或 `http`，默认 `mock`）
@@ -12,6 +13,7 @@
 - `NEXT_PUBLIC_AGENT_TOOL_NAME`：HTTP 模式下默认工具名（默认 `deepscan.search`）
 
 注意：
+
 - 前端不直接暴露模型 Key。
 - 当前不依赖登录即可运行。
 - Agent 面板联调前至少配置 `NEXT_PUBLIC_AGENT_ADAPTER=http` 与 `NEXT_PUBLIC_AGENT_API_BASE_URL`。
@@ -35,6 +37,6 @@
 
 ## 迁移建议
 
-1. 先新增 Gin 服务并对齐接口，再替换前端请求基址。  
-2. 会话与消息链路先迁移到 DB，再关闭本地写入。  
+1. 先新增 Gin 服务并对齐接口，再替换前端请求基址。
+2. 会话与消息链路先迁移到 DB，再关闭本地写入。
 3. Agent 与 MCP 在后端稳定后逐步放量。

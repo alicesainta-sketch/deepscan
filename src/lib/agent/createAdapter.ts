@@ -1,13 +1,13 @@
 import type { AgentAdapter } from "./adapter";
 import {
+  type AgentAdapterMode,
   DEFAULT_MOCK_MODE,
   getAgentAdapterMode,
   getAgentApiBaseUrl,
   getAgentToolName,
-  type AgentAdapterMode,
 } from "./config";
 import { HttpAgentAdapter } from "./httpAdapter";
-import { MockAgentAdapter, type MockAdapterMode } from "./mockAdapter";
+import { type MockAdapterMode, MockAgentAdapter } from "./mockAdapter";
 
 type CreateAgentAdapterOptions = {
   mockMode?: MockAdapterMode;
@@ -26,7 +26,7 @@ export type ResolvedAgentAdapter = {
 };
 
 export const createAgentAdapter = (
-  options: CreateAgentAdapterOptions = {}
+  options: CreateAgentAdapterOptions = {},
 ): ResolvedAgentAdapter => {
   const mode = getAgentAdapterMode();
   if (mode === "http") {

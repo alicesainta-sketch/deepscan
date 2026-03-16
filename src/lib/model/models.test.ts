@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  DEFAULT_CHAT_MODEL,
-  isSupportedChatModel,
-  normalizeChatModel,
-} from "./models";
+
+import { DEFAULT_CHAT_MODEL, isSupportedChatModel, normalizeChatModel } from "./models";
 
 describe("chat models", () => {
   it("detects supported model names", () => {

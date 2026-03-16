@@ -1,11 +1,8 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import {
-  DEFAULT_CHAT_MODEL,
-  normalizeChatModel,
-  type SupportedChatModel,
-} from "./models";
+
+import { DEFAULT_CHAT_MODEL, normalizeChatModel, type SupportedChatModel } from "./models";
 
 const CHAT_MODEL_STORAGE_KEY = "deepscan:global-chat-model";
 

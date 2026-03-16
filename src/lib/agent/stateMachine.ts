@@ -49,10 +49,7 @@ export const createInitialRunState = (params: {
   };
 };
 
-const assertRunTransition = (
-  current: AgentRunState["status"],
-  next: AgentRunState["status"]
-) => {
+const assertRunTransition = (current: AgentRunState["status"], next: AgentRunState["status"]) => {
   const allowed = RUN_TRANSITIONS[current] ?? [];
   if (!allowed.includes(next)) {
     throw new Error(`Invalid run transition: ${current} -> ${next}`);
@@ -62,15 +59,12 @@ const assertRunTransition = (
 const updateStep = (
   state: AgentRunState,
   stepId: string,
-  updater: (step: AgentStep) => AgentStep
+  updater: (step: AgentStep) => AgentStep,
 ) => {
   return state.steps.map((step) => (step.id === stepId ? updater(step) : step));
 };
 
-export const transitionRunState = (
-  state: AgentRunState,
-  action: AgentAction
-): AgentRunState => {
+export const transitionRunState = (state: AgentRunState, action: AgentAction): AgentRunState => {
   const now = Date.now();
 
   switch (action.type) {

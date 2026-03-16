@@ -1,5 +1,7 @@
-import type { Metadata } from "next";
 import "./globals.css";
+
+import type { Metadata } from "next";
+
 import AppShell from "@/components/AppShell";
 import QueryClientProvider from "@/components/QueryClientProvider";
 import ThemeProvider from "@/components/ThemeProvider";

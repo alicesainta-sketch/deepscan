@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+
 import { createAgentAdapter } from "./createAdapter";
 import { HttpAgentAdapter } from "./httpAdapter";
 import { MockAgentAdapter } from "./mockAdapter";
@@ -41,7 +42,7 @@ describe("createAgentAdapter", () => {
     delete process.env.NEXT_PUBLIC_AGENT_API_BASE_URL;
 
     expect(() => createAgentAdapter()).toThrow(
-      "Missing NEXT_PUBLIC_AGENT_API_BASE_URL for http adapter"
+      "Missing NEXT_PUBLIC_AGENT_API_BASE_URL for http adapter",
     );
   });
 });

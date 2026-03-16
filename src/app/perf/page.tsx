@@ -2,6 +2,7 @@
 
 import type { UIMessage } from "ai";
 import { useMemo, useRef, useState } from "react";
+
 import MessageList from "@/app/components/MessageList";
 import { readStoredMessages, writeStoredMessages } from "@/lib/chatMessageStorage";
 import { buildSyntheticMessages } from "@/lib/perf/chatPerfDataset";
@@ -97,9 +98,7 @@ export default function PerfPage() {
       const scrollFps = await measureScrollFps(scrollerElement);
       const heapAfter = getUsedHeapSize();
       const memoryDeltaMb =
-        heapBefore !== null && heapAfter !== null
-          ? (heapAfter - heapBefore) / (1024 * 1024)
-          : null;
+        heapBefore !== null && heapAfter !== null ? (heapAfter - heapBefore) / (1024 * 1024) : null;
 
       setResult({
         datasetMessages: loaded.length,
@@ -116,12 +115,10 @@ export default function PerfPage() {
   };
 
   return (
-    <div className="flex h-full min-h-screen flex-col bg-[#f4f2ec] px-4 py-6 dark:bg-slate-900 md:px-8">
+    <div className="flex h-full min-h-screen flex-col bg-[#f4f2ec] px-4 py-6 md:px-8 dark:bg-slate-900">
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4">
         <header className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            性能基线面板
-          </h1>
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">性能基线面板</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             固定数据集 + 固定流程，复现历史加载、长会话渲染与滚动 FPS。
           </p>
@@ -202,8 +199,7 @@ export default function PerfPage() {
               canRegenerate={false}
               isStreaming={false}
               scrollerRef={(element) => {
-                scrollerElementRef.current =
-                  element instanceof HTMLElement ? element : null;
+                scrollerElementRef.current = element instanceof HTMLElement ? element : null;
               }}
             />
           </div>

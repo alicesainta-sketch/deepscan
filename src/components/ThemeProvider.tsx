@@ -1,13 +1,7 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+
 import { useHydrated } from "@/lib/useHydrated";
 
 type Theme = "light" | "dark";
@@ -32,11 +26,7 @@ const resolveThemeFromClient = (): Theme => {
   return prefersDark ? "dark" : "light";
 };
 
-export default function ThemeProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function ThemeProvider({ children }: { children: React.ReactNode }) {
   const isHydrated = useHydrated();
   const [themeOverride, setThemeOverride] = useState<Theme | null>(null);
   const theme = useMemo<Theme>(() => {
@@ -60,9 +50,7 @@ export default function ThemeProvider({
     setThemeOverride((currentTheme) => {
       const baseTheme =
         currentTheme ??
-        (isHydrated && typeof window !== "undefined"
-          ? resolveThemeFromClient()
-          : "light");
+        (isHydrated && typeof window !== "undefined" ? resolveThemeFromClient() : "light");
       return baseTheme === "dark" ? "light" : "dark";
     });
   }, [isHydrated]);
@@ -73,7 +61,7 @@ export default function ThemeProvider({
       isHydrated,
       toggleTheme,
     }),
-    [theme, isHydrated, toggleTheme]
+    [theme, isHydrated, toggleTheme],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

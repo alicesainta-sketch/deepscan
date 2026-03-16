@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+
 import Navbar from "@/components/Navbar";
 import { useHydrated } from "@/lib/useHydrated";
 
@@ -23,7 +24,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="mx-auto flex h-screen w-full flex-col bg-[#faf9f5] md:flex-row dark:bg-slate-900">
       <aside
-        className={`h-56 w-full border-b border-slate-200/80 md:h-screen md:shrink-0 md:border-b-0 md:border-r md:border-slate-200/80 md:transition-[width] md:duration-200 dark:border-slate-700 ${
+        className={`h-56 w-full border-b border-slate-200/80 md:h-screen md:shrink-0 md:border-r md:border-b-0 md:border-slate-200/80 md:transition-[width] md:duration-200 dark:border-slate-700 ${
           collapsed ? "md:w-[88px]" : "md:w-[300px]"
         }`}
       >

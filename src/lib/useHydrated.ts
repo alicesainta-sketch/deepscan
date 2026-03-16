@@ -22,5 +22,4 @@ const subscribe = (listener: () => void) => {
 const getSnapshot = () => hydrated;
 const getServerSnapshot = () => false;
 
-export const useHydrated = () =>
-  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+export const useHydrated = () => useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
