@@ -1,12 +1,14 @@
 "use client";
 
 import type { UIMessage } from "ai";
-import { type HTMLAttributes, memo, type ReactNode, useEffect, useRef, useState } from "react";
+import { type HTMLAttributes, memo, type ReactNode, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Virtuoso } from "react-virtuoso";
 import remarkGfm from "remark-gfm";
+
+import { useClipboardCopy } from "@/lib/useClipboardCopy";
 
 type MessageListProps = {
   messages: UIMessage[];
@@ -21,46 +23,15 @@ const getMessageContent = (message: UIMessage) => {
 };
 
 function CodeBlock({ code, language }: { code: string; language: string }) {
-  const [copied, setCopied] = useState(false);
-  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (resetTimerRef.current) {
-        clearTimeout(resetTimerRef.current);
-        resetTimerRef.current = null;
-      }
-    };
-  }, []);
-
-  const handleCopyCode = () => {
-    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-      return;
-    }
-
-    if (resetTimerRef.current) {
-      clearTimeout(resetTimerRef.current);
-      resetTimerRef.current = null;
-    }
-
-    void navigator.clipboard
-      .writeText(code)
-      .then(() => {
-        setCopied(true);
-        resetTimerRef.current = setTimeout(() => {
-          setCopied(false);
-        }, 1500);
-      })
-      .catch(() => {
-        setCopied(false);
-      });
-  };
+  const { copied, copy } = useClipboardCopy({ resetAfterMs: 1500 });
 
   return (
     <div className="group relative my-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
       <button
         type="button"
-        onClick={handleCopyCode}
+        onClick={() => {
+          void copy(code);
+        }}
         className="absolute top-2 right-2 z-10 rounded-md border border-slate-500/30 bg-slate-900/70 px-2 py-1 text-[11px] text-slate-100 opacity-0 transition group-hover:opacity-100"
       >
         {copied ? "已复制" : "复制"}
@@ -89,43 +60,9 @@ const MessageCard = memo(function MessageCard({
   onRegenerate,
   canRegenerate,
 }: MessageCardProps) {
-  const content = getMessageContent(message);
+  const content = useMemo(() => getMessageContent(message), [message]);
   const isAssistant = message.role === "assistant";
-  const [copied, setCopied] = useState(false);
-  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (resetTimerRef.current) {
-        clearTimeout(resetTimerRef.current);
-        resetTimerRef.current = null;
-      }
-    };
-  }, []);
-
-  const handleCopyText = () => {
-    if (!content.trim()) return;
-    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-      return;
-    }
-
-    if (resetTimerRef.current) {
-      clearTimeout(resetTimerRef.current);
-      resetTimerRef.current = null;
-    }
-
-    void navigator.clipboard
-      .writeText(content)
-      .then(() => {
-        setCopied(true);
-        resetTimerRef.current = setTimeout(() => {
-          setCopied(false);
-        }, 1200);
-      })
-      .catch(() => {
-        setCopied(false);
-      });
-  };
+  const { copied, copy } = useClipboardCopy({ resetAfterMs: 1200 });
 
   return (
     <article className={`flex ${isAssistant ? "justify-start" : "justify-end"}`}>
@@ -149,7 +86,9 @@ const MessageCard = memo(function MessageCard({
           <div className="flex items-center gap-1.5 opacity-0 transition group-hover:opacity-100">
             <button
               type="button"
-              onClick={handleCopyText}
+              onClick={() => {
+                void copy(content);
+              }}
               className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
             >
               {copied ? "已复制" : "复制文本"}
@@ -232,6 +171,7 @@ export default function MessageList({
     <div className="h-full">
       <Virtuoso
         data={messages}
+        computeItemKey={(_, message) => message.id}
         followOutput={isStreaming ? "smooth" : false}
         increaseViewportBy={480}
         scrollerRef={scrollerRef}
